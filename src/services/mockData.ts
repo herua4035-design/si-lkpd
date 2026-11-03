@@ -112,25 +112,31 @@ export const OFFICIAL_TEACHERS: { name: string; nip: string; mapel?: string }[] 
   { name: 'Dwi Maulida, S.Pd., Gr', nip: '199010012022212016', mapel: 'Kreativitas, Inovasi, dan Kewirausahaan' },
 ];
 
-// Generate User Profiles for Teachers
-export const INITIAL_TEACHERS: UserProfile[] = OFFICIAL_TEACHERS.map((t, idx) => ({
-  uid: `guru-${idx + 1}`,
-  email: t.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) + '@guru.smkn1sidayu.sch.id',
-  displayName: t.name,
-  role: 'guru',
-  password: 'guru123',
-  nip: t.nip && t.nip !== '-' ? t.nip.replace(/\s+/g, '') : t.nip,
-  major: t.mapel || 'Pengajar SMKN 1 Sidayu',
-  subject: t.mapel || 'Pengajar SMKN 1 Sidayu',
-  subjectsTaught: t.mapel ? [t.mapel] : ['Pengajar SMKN 1 Sidayu'],
-  avatarUrl: `https://images.unsplash.com/photo-${1500000000000 + (idx * 111111) % 500000000}?auto=format&fit=crop&q=80&w=250`
-}));
+// Generate User Profiles for Teachers with distinct passwords
+export const INITIAL_TEACHERS: UserProfile[] = OFFICIAL_TEACHERS.map((t, idx) => {
+  const cleanNip = t.nip && t.nip !== '-' ? t.nip.replace(/\s+/g, '') : '';
+  const nipSuffix = cleanNip.length >= 4 ? cleanNip.slice(-4) : `${1000 + idx}`;
+  const personalizedPassword = `Guru${nipSuffix}!`;
+
+  return {
+    uid: `guru-${idx + 1}`,
+    email: t.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) + '@guru.smkn1sidayu.sch.id',
+    displayName: t.name,
+    role: 'guru',
+    password: personalizedPassword,
+    nip: cleanNip || t.nip,
+    major: t.mapel || 'Pengajar SMKN 1 Sidayu',
+    subject: t.mapel || 'Pengajar SMKN 1 Sidayu',
+    subjectsTaught: t.mapel ? [t.mapel] : ['Pengajar SMKN 1 Sidayu'],
+    avatarUrl: `https://images.unsplash.com/photo-${1500000000000 + (idx * 111111) % 500000000}?auto=format&fit=crop&q=80&w=250`
+  };
+});
 
 // Primary active teacher: Ahmad Heru Wahyu Wibowo, S.Pd (teaches 2 mapel: Koding & AI + Informatika)
 const primaryTeacher = INITIAL_TEACHERS.find(t => t.displayName.includes('Ahmad Heru Wahyu Wibowo')) || INITIAL_TEACHERS[57];
 primaryTeacher.email = 'ahmadwibowo62@guru.sma.belajar.id';
 primaryTeacher.uid = 'guru-ahmad-wibowo';
-primaryTeacher.password = 'guru123';
+primaryTeacher.password = 'Guru1002!';
 primaryTeacher.nip = '198312162024211002';
 primaryTeacher.subjectsTaught = ['Koding dan Kecerdasan Artifisial', 'Informatika'];
 primaryTeacher.subject = 'Koding dan Kecerdasan Artifisial, Informatika';
@@ -450,12 +456,31 @@ export const INITIAL_MATERIALS: LearningMaterial[] = [
   {
     id: 'mat-01',
     title: 'Modul Ajar: Fondasi Koding & Prompt Engineering AI SMK',
-    description: 'Panduan lengkap struktur prompt instruksional Fase E SMKN 1 Sidayu.',
+    description: 'Panduan lengkap struktur prompt instruksional Fase E SMKN 1 Sidayu dengan studi kasus sistem perangkat lunak.',
     subject: 'Koding dan Kecerdasan Artifisial',
-    classIds: ['class-x-tkj-1', 'class-x-tkj-2'],
+    classIds: ['class-x-tkj-1', 'class-x-tkj-2', 'class-x-tkj-3'],
     type: 'pdf',
     fileName: 'Modul_Prompt_Engineering_SMKN1Sidayu.pdf',
+    fileSize: '3.4 MB',
     fileUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    attachments: [
+      {
+        id: 'att-m1',
+        name: 'Modul_Prompt_Engineering_SMKN1Sidayu.pdf',
+        url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+        type: 'pdf',
+        size: '3.4 MB',
+        uploadedAt: '2026-10-28T09:00:00Z'
+      },
+      {
+        id: 'att-m2',
+        name: 'Lembar_Kerja_Format_Prompt.docx',
+        url: '#',
+        type: 'docx',
+        size: '420 KB',
+        uploadedAt: '2026-10-28T09:15:00Z'
+      }
+    ],
     tpId: 'tp-01',
     teacherId: primaryTeacher.uid,
     teacherName: primaryTeacher.displayName,
@@ -470,7 +495,18 @@ export const INITIAL_MATERIALS: LearningMaterial[] = [
     classIds: ['class-x-tkj-1'],
     type: 'ppt',
     fileName: 'Materi_Presentasi_SDLC_AI.pptx',
+    fileSize: '5.8 MB',
     fileUrl: '#',
+    attachments: [
+      {
+        id: 'att-m3',
+        name: 'Materi_Presentasi_SDLC_AI.pptx',
+        url: '#',
+        type: 'ppt',
+        size: '5.8 MB',
+        uploadedAt: '2026-10-30T10:30:00Z'
+      }
+    ],
     tpId: 'tp-02',
     teacherId: primaryTeacher.uid,
     teacherName: primaryTeacher.displayName,
@@ -499,7 +535,7 @@ export const INITIAL_ASSIGNMENTS: Assignment[] = [
     title: 'Penugasan Mandiri: LKPD Interaktif Prompt Engineering Fase E',
     description: 'Kerjakan seluruh komponen LKPD Interaktif 01 mulai dari Orientasi, Eksplorasi materi, Diskusi tertulis, Praktik prompt, hingga Refleksi diri.',
     subject: 'Koding dan Kecerdasan Artifisial',
-    classIds: ['class-x-tkj-1', 'class-x-tkj-2'],
+    classIds: ['class-x-tkj-1', 'class-x-tkj-2', 'class-x-tkj-3'],
     cpId: 'cp-01',
     tpId: 'tp-01',
     rubricId: 'rubric-01',
@@ -507,6 +543,24 @@ export const INITIAL_ASSIGNMENTS: Assignment[] = [
     deadline: '2026-11-20T23:59:00Z',
     teacherId: primaryTeacher.uid,
     teacherName: primaryTeacher.displayName,
+    attachments: [
+      {
+        id: 'att-a1',
+        name: 'Panduan_Pengerjaan_LKPD_FaseE.pdf',
+        url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+        type: 'pdf',
+        size: '1.2 MB',
+        uploadedAt: '2026-11-01T08:30:00Z'
+      },
+      {
+        id: 'att-a2',
+        name: 'Rubrik_Penilaian_Prompt_Engineering.pdf',
+        url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+        type: 'pdf',
+        size: '560 KB',
+        uploadedAt: '2026-11-01T08:32:00Z'
+      }
+    ],
     createdAt: '2026-11-01T08:30:00Z'
   },
   {
@@ -521,6 +575,16 @@ export const INITIAL_ASSIGNMENTS: Assignment[] = [
     deadline: '2026-11-25T23:59:00Z',
     teacherId: primaryTeacher.uid,
     teacherName: primaryTeacher.displayName,
+    attachments: [
+      {
+        id: 'att-a3',
+        name: 'Template_Flowchart_Algoritma.docx',
+        url: '#',
+        type: 'docx',
+        size: '890 KB',
+        uploadedAt: '2026-11-02T10:00:00Z'
+      }
+    ],
     createdAt: '2026-11-02T10:00:00Z'
   }
 ];

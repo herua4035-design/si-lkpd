@@ -56,6 +56,15 @@ export interface TujuanPembelajaran {
 
 export type MaterialType = 'pdf' | 'docx' | 'ppt' | 'video' | 'image' | 'youtube';
 
+export interface AttachmentItem {
+  id: string;
+  name: string;
+  url: string;
+  type: string; // 'pdf' | 'docx' | 'ppt' | 'image' | 'video' | 'link' | 'file'
+  size?: string;
+  uploadedAt?: string;
+}
+
 export interface LearningMaterial {
   id: string;
   title: string;
@@ -65,7 +74,10 @@ export interface LearningMaterial {
   type: MaterialType;
   fileUrl?: string;
   fileName?: string;
+  fileSize?: string;
   youtubeId?: string;
+  externalLink?: string;
+  attachments?: AttachmentItem[];
   tpId?: string;
   teacherId: string;
   teacherName: string;
@@ -155,11 +167,7 @@ export interface Assignment {
   deadline: string;
   teacherId: string;
   teacherName: string;
-  attachments?: {
-    name: string;
-    url: string;
-    type: string;
-  }[];
+  attachments?: AttachmentItem[];
   createdAt: string;
 }
 
@@ -187,6 +195,8 @@ export interface Submission {
   note?: string;
   fileUrl?: string;
   fileName?: string;
+  fileSize?: string;
+  attachments?: AttachmentItem[];
   lkpdAnswers?: LKPDAnswer;
   scoreId?: string;
 }
