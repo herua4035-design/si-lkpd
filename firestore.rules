@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'guru' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'guru'
+      );
+    }
+
+    function isStudent() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'murid' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'murid'
+      );
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isOwner(userId);
+    }
+
+    // Classes collection
+    match /classes/{classId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isTeacher();
+    }
+
+    // Capaian Pembelajaran (CP) & Tujuan Pembelajaran (TP)
+    match /cp/{cpId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isTeacher();
+    }
+
+    match /tp/{tpId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isTeacher();
+    }
+
+    // Learning Materials
+    match /materials/{materialId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || (isTeacher() && resource.data.teacherId == request.auth.uid);
+      allow create: if isTeacher() || isAdmin();
+    }
+
+    // Assignments & LKPD
+    match /assignments/{assignmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || (isTeacher() && resource.data.teacherId == request.auth.uid);
+      allow create: if isTeacher() || isAdmin();
+    }
+
+    match /lkpd/{lkpdId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isTeacher();
+    }
+
+    match /rubrics/{rubricId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isTeacher();
+    }
+
+    // Submissions
+    // Murid hanya dapat membaca & mengunggah tugas miliknya sendiri
+    // Guru dapat membaca & menilai tugas
+    match /submissions/{submissionId} {
+      allow read: if isAdmin() || isTeacher() || (isStudent() && resource.data.studentId == request.auth.uid);
+      allow create: if isAuthenticated() && (isStudent() || isAdmin());
+      allow update: if isAdmin() || isTeacher() || (isStudent() && resource.data.studentId == request.auth.uid);
+      allow delete: if isAdmin() || (isTeacher() && resource.data.teacherId == request.auth.uid);
+    }
+
+    // Scores
+    // Murid hanya dapat melihat nilai miliknya sendiri
+    // Guru hanya dapat menilai tugas kelas yang diampu
+    match /scores/{scoreId} {
+      allow read: if isAdmin() || isTeacher() || (isStudent() && resource.data.studentId == request.auth.uid);
+      allow write: if isAdmin() || isTeacher();
+    }
+
+    // Notifications
+    match /notifications/{notifId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.userId == 'all');
+      allow write: if isAuthenticated();
+    }
+
+    // Realtime Messages / Chat
+    match /messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin() || resource.data.senderId == request.auth.uid;
+    }
+
+    // Announcements
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isTeacher();
+    }
+  }
+}

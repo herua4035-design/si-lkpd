@@ -1,0 +1,21 @@
+{
+  "name": "SI-LKPD SMKN 1 SIDAYU",
+  "short_name": "SI-LKPD",
+  "description": "Sistem LKPD Interaktif dan Pembelajaran Daring SMKN 1 Sidayu",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192' fill='%232563eb'><rect width='192' height='192' rx='36' fill='%232563eb'/><path d='M96 40L24 80l72 40 56-31.11V130h16V80L96 40zM52 108.64v28L96 160l44-23.36v-28L96 132l-44-23.36z' fill='white'/></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='%232563eb'><rect width='512' height='512' rx='96' fill='%232563eb'/><path d='M256 100L60 210l196 110 150-84.3V350h40V210L256 100zM140 290v76l116 64 116-64v-76l-116 62-116-62z' fill='white'/></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'si-lkpd-smkn1sidayu',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+};
+
+export const isFirebaseConfigured = Boolean(
+  import.meta.env.VITE_FIREBASE_API_KEY &&
+  import.meta.env.VITE_FIREBASE_PROJECT_ID
+);
+
+let app;
+let auth: ReturnType<typeof getAuth> | null = null;
+let db: ReturnType<typeof getFirestore> | null = null;
+let storage: ReturnType<typeof getStorage> | null = null;
+
+try {
+  if (isFirebaseConfigured) {
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    auth = getAuth(app);
+    db = getFirestore(app);
+    storage = getStorage(app);
+  }
+} catch (error) {
+  console.warn('Firebase initialization skipped or failed, falling back to local persistent store:', error);
+}
+
+export { app, auth, db, storage };
+
+export const COLLECTIONS = {
+  USERS: 'users',
+  TEACHERS: 'teachers',
+  STUDENTS: 'students',
+  CLASSES: 'classes',
+  CP: 'cp',
+  TP: 'tp',
+  MATERIALS: 'materials',
+  ASSIGNMENTS: 'assignments',
+  LKPD: 'lkpd',
+  RUBRICS: 'rubrics',
+  SUBMISSIONS: 'submissions',
+  SCORES: 'scores',
+  NOTIFICATIONS: 'notifications',
+  MESSAGES: 'messages',
+  ANNOUNCEMENTS: 'announcements',
+} as const;

@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix Remix SI-LKPD SMKN 1 SIDAYU",
+  "description": "Sistem LKPD Interaktif dan Pembelajaran Daring SMKN 1 Sidayu dengan Manajemen CP \u0026 TP, Penilaian Otomatis, dan Analitik.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
