@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { ClassGroup, LearningMaterial, Assignment } from '../types';
@@ -41,7 +41,9 @@ import {
   Zap,
   Fish,
   HelpCircle,
-  FileCheck2
+  FileCheck2,
+  Upload,
+  UploadCloud
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
@@ -129,6 +131,24 @@ export const ClassPage: React.FC = () => {
 
   // Search filter for students inside active class
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
+
+  // Subjects taught by current logged-in teacher
+  const teacherSubjects: string[] = currentUser.subjectsTaught && currentUser.subjectsTaught.length > 0
+    ? currentUser.subjectsTaught
+    : currentUser.subject
+    ? currentUser.subject.split(',').map((s) => s.trim()).filter(Boolean)
+    : ['Koding dan Kecerdasan Artifisial'];
+
+  // Real Class File Upload modal state
+  const [showClassUploadModal, setShowClassUploadModal] = useState(false);
+  const [classUploadTitle, setClassUploadTitle] = useState('');
+  const [classUploadFolder, setClassUploadFolder] = useState<'Modul Ajar' | 'Jobsheet LKPD' | 'Bahan Tayang PPT' | 'Bank Soal & Asesmen'>('Modul Ajar');
+  const [classUploadSubject, setClassUploadSubject] = useState(teacherSubjects[0] || 'Koding dan Kecerdasan Artifisial');
+  const [classUploadDescription, setClassUploadDescription] = useState('');
+  const [classUploadedFiles, setClassUploadedFiles] = useState<Array<{ name: string; size: string; type: any; url: string }>>([]);
+  const [isClassFileDragging, setIsClassFileDragging] = useState(false);
+  const classFileInputRef = useRef<HTMLInputElement>(null);
+  const postFileInputRef = useRef<HTMLInputElement>(null);
 
   const canManage = role === 'admin' || role === 'guru';
 
@@ -277,15 +297,125 @@ export const ClassPage: React.FC = () => {
     });
   };
 
-  const handleSimulateAddAttachment = () => {
-    const mockFiles = [
-      { name: `Modul_Praktikum_${activeClass?.name || 'Kelas'}.pdf`, size: '3.4 MB', type: 'pdf' },
-      { name: `Jobsheet_Kegiatan_Laboratorium.docx`, size: '1.2 MB', type: 'docx' },
-      { name: `Slide_Presentasi_Materi.pptx`, size: '5.8 MB', type: 'pptx' },
-      { name: `Tabel_Pengamatan_Siswa.xlsx`, size: '890 KB', type: 'xlsx' }
-    ];
-    const picked = mockFiles[attachedFiles.length % mockFiles.length];
-    setAttachedFiles((prev) => [...prev, picked]);
+  // Format bytes helper
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  const detectFileType = (filename: string): string => {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    if (ext === 'pdf') return 'pdf';
+    if (['docx', 'doc'].includes(ext)) return 'docx';
+    if (['pptx', 'ppt'].includes(ext)) return 'ppt';
+    if (['xlsx', 'xls', 'csv'].includes(ext)) return 'xlsx';
+    if (['mp4', 'mkv', 'mov', 'webm'].includes(ext)) return 'video';
+    if (['png', 'jpg', 'jpeg', 'webp', 'svg'].includes(ext)) return 'image';
+    return 'pdf';
+  };
+
+  // Real file picker for Post composer
+  const handlePostFileSelected = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      const detected = detectFileType(file.name);
+      reader.onload = (e) => {
+        const dataUrl = (e.target?.result as string) || '#';
+        setAttachedFiles((prev) => [
+          ...prev,
+          {
+            name: file.name,
+            size: formatFileSize(file.size),
+            type: detected,
+            url: dataUrl
+          }
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Real file picker for Class module upload
+  const handleClassFilesPicked = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      const detected = detectFileType(file.name);
+      reader.onload = (e) => {
+        const dataUrl = (e.target?.result as string) || '#';
+        setClassUploadedFiles((prev) => [
+          ...prev,
+          {
+            name: file.name,
+            size: formatFileSize(file.size),
+            type: detected,
+            url: dataUrl
+          }
+        ]);
+        setClassUploadTitle((prev) => {
+          if (!prev.trim()) {
+            return file.name.replace(/\.[^/.]+$/, '').replace(/[_\\-]/g, ' ');
+          }
+          return prev;
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleSaveClassUpload = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeClass) return;
+    if (classUploadedFiles.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Pilih Berkas Terlebih Dahulu',
+        text: 'Silakan klik area unggah untuk memilih dokumen dari komputer atau HP Anda.'
+      });
+      return;
+    }
+
+    const first = classUploadedFiles[0];
+    const newTitle = classUploadTitle.trim() || first.name;
+
+    addMaterial({
+      title: `[${classUploadFolder}] ${newTitle}`,
+      description: classUploadDescription || `Modul ajar ${classUploadFolder} untuk rombel ${activeClass.name}`,
+      subject: classUploadSubject,
+      classIds: [activeClass.id],
+      type: first.type as any,
+      fileName: first.name,
+      fileSize: first.size,
+      fileUrl: first.url,
+      attachments: classUploadedFiles.map((f, i) => ({
+        id: `att-cls-${Date.now()}-${i}`,
+        name: f.name,
+        size: f.size,
+        type: f.type,
+        url: f.url,
+        uploadedAt: new Date().toISOString()
+      })),
+      tpId: 'tp-01',
+      teacherId: currentUser.uid,
+      teacherName: currentUser.displayName
+    });
+
+    setShowClassUploadModal(false);
+    setClassUploadTitle('');
+    setClassUploadDescription('');
+    setClassUploadedFiles([]);
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Dokumen Berhasil Diunggah ke Tim',
+      text: `File "${newTitle}" telah dibagikan ke seluruh siswa rombel ${activeClass.name}.`,
+      timer: 2000,
+      showConfirmButton: false
+    });
   };
 
   // Students belonging STRICTLY to active class
@@ -763,13 +893,26 @@ export const ClassPage: React.FC = () => {
 
                   {/* Composer Footer */}
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                    {/* Hidden Native File Input for Post Attachment */}
+                    <input
+                      ref={postFileInputRef}
+                      type="file"
+                      multiple
+                      accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.mp4,.zip,.png,.jpg,.jpeg"
+                      onChange={(e) => {
+                        handlePostFileSelected(e.target.files);
+                        if (e.target) e.target.value = '';
+                      }}
+                      className="hidden"
+                    />
+
                     <button
                       type="button"
-                      onClick={handleSimulateAddAttachment}
+                      onClick={() => postFileInputRef.current?.click()}
                       className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
                     >
                       <Paperclip className="h-3.5 w-3.5 text-indigo-500" />
-                      <span>+ Lampirkan File / Dokumen</span>
+                      <span>+ Lampirkan File dari Perangkat</span>
                     </button>
 
                     <button
@@ -921,30 +1064,11 @@ export const ClassPage: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => {
-                    Swal.fire({
-                      title: 'Unggah File Modul Baru',
-                      text: 'Pilih file dokumen PDF, Word, atau PPT untuk diunggah ke saluran kelas ini.',
-                      icon: 'info',
-                      showCancelButton: true,
-                      confirmButtonText: 'Pilih File dari Perangkat',
-                      confirmButtonColor: '#4f46e5'
-                    }).then((r) => {
-                      if (r.isConfirmed) {
-                        Swal.fire({
-                          icon: 'success',
-                          title: 'File Berhasil Diunggah ke Teams',
-                          text: 'Dokumen sekarang tersedia untuk seluruh siswa di kelas.',
-                          timer: 1600,
-                          showConfirmButton: false
-                        });
-                      }
-                    });
-                  }}
-                  className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-indigo-600/30 hover:bg-indigo-700 transition-colors"
+                  onClick={() => setShowClassUploadModal(true)}
+                  className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-indigo-600/30 hover:bg-indigo-700 transition-colors cursor-pointer"
                 >
-                  <Plus className="h-4 w-4" />
-                  <span>Unggah File Baru</span>
+                  <Upload className="h-4 w-4" />
+                  <span>Unggah File / Modul Baru</span>
                 </button>
               </div>
 
@@ -1411,6 +1535,194 @@ export const ClassPage: React.FC = () => {
                   className="rounded-2xl bg-indigo-600 px-5 py-2.5 font-bold text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/30"
                 >
                   Simpan Kelas
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Unggah Berkas & Modul Kelas (Teams Channel File Uploader) */}
+      {showClassUploadModal && activeClass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded-2xl bg-indigo-100 p-2.5 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
+                  <Upload className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    Unggah Dokumen ke Saluran {activeClass.name}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Berkas akan disinkronkan dan dapat langsung diakses oleh peserta didik.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowClassUploadModal(false)}
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveClassUpload} className="mt-4 space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Kategori / Folder Penyimpanan
+                  </label>
+                  <select
+                    value={classUploadFolder}
+                    onChange={(e) => setClassUploadFolder(e.target.value as any)}
+                    className="w-full rounded-2xl border border-slate-300 p-2.5 dark:border-slate-700 dark:bg-slate-800 dark:text-white font-medium"
+                  >
+                    <option value="Modul Ajar">📁 Modul Ajar</option>
+                    <option value="Jobsheet LKPD">📄 Jobsheet LKPD</option>
+                    <option value="Bahan Tayang PPT">📊 Bahan Tayang PPT</option>
+                    <option value="Bank Soal & Asesmen">📝 Bank Soal & Asesmen</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Mata Pelajaran
+                  </label>
+                  <select
+                    value={classUploadSubject}
+                    onChange={(e) => setClassUploadSubject(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 p-2.5 dark:border-slate-700 dark:bg-slate-800 dark:text-white font-medium"
+                  >
+                    {teacherSubjects.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Nama Dokumen / Judul Materi
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Misal: Modul Ajar Praktik Konfigurasi Routing Dinamis OSPF"
+                  value={classUploadTitle}
+                  onChange={(e) => setClassUploadTitle(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-300 p-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white font-bold"
+                />
+              </div>
+
+              {/* Native hidden file input */}
+              <input
+                ref={classFileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.mp4,.zip,.png,.jpg,.jpeg"
+                onChange={(e) => {
+                  handleClassFilesPicked(e.target.files);
+                  if (e.target) e.target.value = '';
+                }}
+                className="hidden"
+              />
+
+              {/* Dropzone */}
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Pilih Berkas dari Perangkat (PDF, Word, PPT, Excel, Video, ZIP)
+                </label>
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsClassFileDragging(true);
+                  }}
+                  onDragLeave={() => setIsClassFileDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsClassFileDragging(false);
+                    handleClassFilesPicked(e.dataTransfer.files);
+                  }}
+                  onClick={() => classFileInputRef.current?.click()}
+                  className={`flex flex-col items-center justify-center p-5 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
+                    isClassFileDragging
+                      ? 'border-indigo-600 bg-indigo-50/80 dark:bg-indigo-950/60'
+                      : 'border-slate-300 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/60 hover:bg-slate-100 hover:border-indigo-500'
+                  }`}
+                >
+                  <div className="rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400 p-2.5 mb-2">
+                    <UploadCloud className="h-6 w-6" />
+                  </div>
+                  <p className="font-bold text-xs text-slate-800 dark:text-slate-200 text-center">
+                    Klik untuk memilih berkas dari komputer / HP
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5 text-center">
+                    Mendukung berkas modul materi, Jobsheet, slide presentasi, atau zip
+                  </p>
+                </div>
+              </div>
+
+              {/* Uploaded files preview */}
+              {classUploadedFiles.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                    Berkas Siap Diunggah ({classUploadedFiles.length}):
+                  </span>
+                  {classUploadedFiles.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between rounded-xl bg-indigo-50/60 dark:bg-indigo-950/40 p-2.5 border border-indigo-100 dark:border-indigo-900 text-xs"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <FileText className="h-4 w-4 text-indigo-600 shrink-0" />
+                        <span className="font-semibold text-slate-900 dark:text-white truncate">
+                          {file.name}
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-400">({file.size})</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setClassUploadedFiles((prev) => prev.filter((_, i) => i !== idx))}
+                        className="text-slate-400 hover:text-rose-500 p-1 cursor-pointer"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Catatan atau Petunjuk Singkat (Opsional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Instruksi tambahan untuk siswa terkait dokumen ini..."
+                  value={classUploadDescription}
+                  onChange={(e) => setClassUploadDescription(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-300 p-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowClassUploadModal(false)}
+                  className="rounded-2xl px-4 py-2.5 text-slate-600 hover:bg-slate-100 dark:text-slate-300 cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={classUploadedFiles.length === 0}
+                  className="rounded-2xl bg-indigo-600 px-5 py-2.5 font-bold text-white hover:bg-indigo-700 disabled:opacity-40 shadow-md shadow-indigo-600/30 cursor-pointer"
+                >
+                  Unggah & Bagikan ke Saluran Kelas
                 </button>
               </div>
             </form>

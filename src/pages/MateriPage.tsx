@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { LearningMaterial, MaterialType, AttachmentItem } from '../types';
@@ -20,6 +20,7 @@ import {
   Search,
   Paperclip,
   Upload,
+  UploadCloud,
   UserCheck,
   CheckCircle2,
   FileSpreadsheet,
@@ -64,8 +65,9 @@ export const MateriPage: React.FC = () => {
       uploadedAt: new Date().toISOString()
     }
   ]);
-  const [newAttachmentName, setNewAttachmentName] = useState('');
   const [externalLinkUrl, setExternalLinkUrl] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canManage = role === 'guru' || role === 'admin';
 
@@ -86,19 +88,93 @@ export const MateriPage: React.FC = () => {
     return matchesType && matchesSearch && matchesMyMaterials;
   });
 
-  const handleAddAttachment = () => {
-    if (!newAttachmentName.trim()) return;
-    const ext = newAttachmentName.split('.').pop()?.toLowerCase() || 'pdf';
+  // Format bytes helper
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  // Extension to MaterialType helper
+  const detectFileType = (filename: string): MaterialType => {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    if (ext === 'pdf') return 'pdf';
+    if (['docx', 'doc'].includes(ext)) return 'docx';
+    if (['pptx', 'ppt'].includes(ext)) return 'ppt';
+    if (['mp4', 'mkv', 'mov', 'webm'].includes(ext)) return 'video';
+    if (['png', 'jpg', 'jpeg', 'webp', 'svg'].includes(ext)) return 'image';
+    return 'pdf';
+  };
+
+  // Real File Upload Handler using FileReader
+  const handleFilesSelected = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      const detected = detectFileType(file.name);
+
+      reader.onload = (e) => {
+        const dataUrl = (e.target?.result as string) || '#';
+        const newAtt: AttachmentItem = {
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: file.name,
+          url: dataUrl,
+          type: detected,
+          size: formatFileSize(file.size),
+          uploadedAt: new Date().toISOString()
+        };
+
+        setAttachments((prev) => {
+          // If default placeholder is still the only item, replace it
+          if (prev.length === 1 && prev[0].id === 'att-default-1') {
+            return [newAtt];
+          }
+          return [...prev, newAtt];
+        });
+
+        // Auto-fill title if empty
+        setTitle((prev) => {
+          if (!prev.trim()) {
+            return file.name.replace(/\.[^/.]+$/, '').replace(/[_\\-]/g, ' ');
+          }
+          return prev;
+        });
+
+        // Set type to match first uploaded file
+        setType(detected);
+      };
+
+      reader.readAsDataURL(file);
+    });
+
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: `${files.length} file berhasil ditambahkan`,
+      showConfirmButton: false,
+      timer: 1500
+    });
+  };
+
+  const handleAddExternalLink = () => {
+    if (!externalLinkUrl.trim()) return;
     const newAtt: AttachmentItem = {
-      id: `att-${Date.now()}`,
-      name: newAttachmentName.trim(),
-      url: externalLinkUrl.trim() || '#',
-      type: ext === 'docx' ? 'docx' : ext === 'pptx' ? 'pptx' : ext === 'mp4' ? 'video' : 'pdf',
-      size: `${(Math.random() * 4 + 1).toFixed(1)} MB`,
+      id: `att-ext-${Date.now()}`,
+      name: externalLinkUrl.includes('drive.google.com')
+        ? 'Google Drive Dokumen Ajar'
+        : externalLinkUrl.includes('youtube.com') || externalLinkUrl.includes('youtu.be')
+        ? 'Tautan Video Pembelajaran'
+        : 'Tautan Referensi Eksternal',
+      url: externalLinkUrl.trim(),
+      type: externalLinkUrl.includes('youtube.com') || externalLinkUrl.includes('youtu.be') ? 'youtube' : 'pdf',
+      size: 'Cloud Link',
       uploadedAt: new Date().toISOString()
     };
     setAttachments((prev) => [...prev, newAtt]);
-    setNewAttachmentName('');
     setExternalLinkUrl('');
   };
 
@@ -108,20 +184,29 @@ export const MateriPage: React.FC = () => {
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Judul Wajib Diisi',
+        text: 'Silakan ketikkan judul materi pembelajaran.'
+      });
+      return;
+    }
+
+    const mainFile = attachments[0];
 
     addMaterial({
       title,
-      description,
+      description: description || 'Modul pembelajaran resmi SMKN 1 Sidayu.',
       subject,
       classIds: [selectedClassId],
-      type,
+      type: mainFile ? (mainFile.type as MaterialType) : type,
       youtubeId: type === 'youtube' ? youtubeId : undefined,
-      fileName: attachments[0]?.name || `${title.replace(/\s+/g, '_')}.pdf`,
-      fileSize: attachments[0]?.size || '2.8 MB',
+      fileName: mainFile?.name || `${title.replace(/\s+/g, '_')}.pdf`,
+      fileSize: mainFile?.size || '1.8 MB',
       attachments: attachments.length > 0 ? attachments : undefined,
       externalLink: externalLinkUrl || undefined,
-      fileUrl: '#',
+      fileUrl: mainFile?.url || '#',
       tpId: 'tp-01',
       teacherId: currentUser.uid,
       teacherName: currentUser.displayName
@@ -143,9 +228,9 @@ export const MateriPage: React.FC = () => {
 
     Swal.fire({
       icon: 'success',
-      title: 'Materi Pembelajaran Diterbitkan',
-      text: 'Dokumen modul dan lampiran telah disinkronkan ke ruang kelas peserta didik.',
-      timer: 1800,
+      title: 'Materi Pembelajaran Berhasil Diunggah & Diterbitkan',
+      text: 'Semua file lampiran telah siap diakses oleh siswa.',
+      timer: 2000,
       showConfirmButton: false
     });
   };
@@ -534,58 +619,122 @@ export const MateriPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Advanced Multi-Attachment File Uploader */}
+              {/* Real Multi-Attachment File Uploader (Dropzone + Native File Input) */}
               <div className="rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="font-extrabold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
                     <Paperclip className="h-4 w-4 text-indigo-600" />
-                    Lampirkan Dokumen & File Pelengkap (LMS Attachments)
+                    Lampirkan Dokumen & Berkas Modul
                   </label>
                   <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">
-                    {attachments.length} Terlampir
+                    {attachments.length} Berkas Terlampir
                   </span>
                 </div>
 
-                {/* List of currently attached files */}
-                {attachments.map((att) => (
-                  <div
-                    key={att.id}
-                    className="flex items-center justify-between rounded-xl bg-white dark:bg-slate-800 p-2.5 border border-indigo-100 dark:border-indigo-900 shadow-xs"
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <FileText className="h-4 w-4 text-indigo-600 shrink-0" />
-                      <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate">
-                        {att.name}
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-400">({att.size})</span>
-                    </div>
+                {/* Hidden Native File Input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.mp4,.zip,.png,.jpg,.jpeg"
+                  onChange={(e) => {
+                    handleFilesSelected(e.target.files);
+                    if (e.target) e.target.value = '';
+                  }}
+                  className="hidden"
+                />
 
+                {/* Drag & Drop Upload Zone */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    handleFilesSelected(e.dataTransfer.files);
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`flex flex-col items-center justify-center p-5 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
+                    isDragging
+                      ? 'border-indigo-600 bg-indigo-100/70 dark:bg-indigo-950/60 scale-[1.01]'
+                      : 'border-indigo-300 dark:border-indigo-800 bg-white/80 dark:bg-slate-800/80 hover:bg-white hover:border-indigo-500'
+                  }`}
+                >
+                  <div className="rounded-2xl bg-indigo-100 dark:bg-indigo-900/60 p-3 text-indigo-600 dark:text-indigo-300 mb-2">
+                    <UploadCloud className="h-6 w-6" />
+                  </div>
+                  <p className="font-bold text-xs text-slate-800 dark:text-slate-200 text-center">
+                    Klik untuk memilih berkas dari perangkat Anda
+                  </p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 text-center">
+                    atau seret & letakkan file ke sini (Mendukung PDF, DOCX, PPTX, XLSX, MP4, ZIP, Gambar)
+                  </p>
+                  <div className="mt-2.5 flex flex-wrap justify-center gap-1">
+                    {['PDF Modul', 'Word DOCX', 'Slide PPTX', 'Excel Jobsheet', 'Video MP4'].map((fmt) => (
+                      <span key={fmt} className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-slate-600">
+                        {fmt}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* List of currently attached files */}
+                {attachments.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    {attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        className="flex items-center justify-between rounded-xl bg-white dark:bg-slate-800 p-2.5 border border-indigo-100 dark:border-indigo-900 shadow-xs"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <FileText className="h-4 w-4 text-indigo-600 shrink-0" />
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate">
+                            {att.name}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400">({att.size})</span>
+                          <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                            {att.type}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAttachment(att.id)}
+                          className="text-slate-400 hover:text-rose-500 p-1 cursor-pointer"
+                          title="Hapus berkas ini"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Optional External Link (Google Drive / YouTube) */}
+                <div className="pt-2 border-t border-indigo-100 dark:border-indigo-900/60">
+                  <p className="text-[10px] font-bold text-slate-500 mb-1">
+                    Atau sertakan tautan Google Drive / Cloud Storage (Opsional):
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://drive.google.com/file/d/..."
+                      value={externalLinkUrl}
+                      onChange={(e) => setExternalLinkUrl(e.target.value)}
+                      className="flex-1 rounded-xl border border-slate-300 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-800"
+                    />
                     <button
                       type="button"
-                      onClick={() => handleRemoveAttachment(att.id)}
-                      className="text-slate-400 hover:text-rose-500 p-1"
+                      onClick={handleAddExternalLink}
+                      disabled={!externalLinkUrl.trim()}
+                      className="rounded-xl bg-slate-800 text-white px-3 py-2 font-bold hover:bg-slate-700 disabled:opacity-40 text-xs cursor-pointer"
                     >
-                      <X className="h-4 w-4" />
+                      + Tambah Tautan
                     </button>
                   </div>
-                ))}
-
-                {/* Quick Add Attachment Row */}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Nama file / dokumen (misal: Jobsheet_Praktikum.docx)..."
-                    value={newAttachmentName}
-                    onChange={(e) => setNewAttachmentName(e.target.value)}
-                    className="flex-1 rounded-xl border border-slate-300 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-800 text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddAttachment}
-                    className="rounded-xl bg-indigo-600 px-4 py-2 font-bold text-white hover:bg-indigo-700 cursor-pointer text-xs"
-                  >
-                    + Lampirkan
-                  </button>
                 </div>
               </div>
 

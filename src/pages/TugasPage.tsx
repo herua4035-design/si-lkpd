@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Assignment, AttachmentItem } from '../types';
@@ -13,6 +13,7 @@ import {
   Target,
   Award,
   Upload,
+  UploadCloud,
   CheckCircle2,
   AlertCircle,
   X,
@@ -78,28 +79,64 @@ export const TugasPage: React.FC = () => {
       uploadedAt: new Date().toISOString()
     }
   ]);
-  const [newAttName, setNewAttName] = useState('');
-
   // Student submission form states
   const [studentNote, setStudentNote] = useState('');
   const [uploadedFileName, setUploadedFileName] = useState('Laporan_Praktikum_Mandiri.pdf');
+  const [submissionFileUrl, setSubmissionFileUrl] = useState('#');
   const [submissionLink, setSubmissionLink] = useState('');
+  const [isSubmissionDragging, setIsSubmissionDragging] = useState(false);
+
+  const assignmentFileInputRef = useRef<HTMLInputElement>(null);
+  const submissionFileInputRef = useRef<HTMLInputElement>(null);
 
   const canManage = role === 'guru' || role === 'admin';
 
-  const handleAddAssignmentAttachment = () => {
-    if (!newAttName.trim()) return;
-    const ext = newAttName.split('.').pop()?.toLowerCase() || 'pdf';
-    const newAtt: AttachmentItem = {
-      id: `att-${Date.now()}`,
-      name: newAttName.trim(),
-      url: '#',
-      size: `${(Math.random() * 3 + 0.5).toFixed(1)} MB`,
-      type: ext === 'docx' ? 'docx' : ext === 'pptx' ? 'pptx' : 'pdf',
-      uploadedAt: new Date().toISOString()
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  const handleAssignmentFilesPicked = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf';
+      const detectedType = ext === 'docx' ? 'docx' : ext === 'pptx' ? 'pptx' : 'pdf';
+      reader.onload = (e) => {
+        const dataUrl = (e.target?.result as string) || '#';
+        const newAtt: AttachmentItem = {
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: file.name,
+          url: dataUrl,
+          size: formatFileSize(file.size),
+          type: detectedType,
+          uploadedAt: new Date().toISOString()
+        };
+        setAssignmentAttachments((prev) => [...prev, newAtt]);
+        setTitle((prev) => {
+          if (!prev.trim()) {
+            return `Tugas Praktik: ${file.name.replace(/\.[^/.]+$/, '').replace(/[_\\-]/g, ' ')}`;
+          }
+          return prev;
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleStudentFileSelect = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = (e.target?.result as string) || '#';
+      setUploadedFileName(file.name);
+      setSubmissionFileUrl(dataUrl);
     };
-    setAssignmentAttachments((prev) => [...prev, newAtt]);
-    setNewAttName('');
+    reader.readAsDataURL(file);
   };
 
   const handleCreateAssignment = (e: React.FormEvent) => {
@@ -158,12 +195,13 @@ export const TugasPage: React.FC = () => {
       className: currentUser.className || 'X TKJ 1',
       note: studentNote,
       fileName: uploadedFileName,
-      fileUrl: submissionLink || '#'
+      fileUrl: submissionFileUrl !== '#' ? submissionFileUrl : (submissionLink || '#')
     });
 
     setShowSubmitModal(null);
     setStudentNote('');
     setSubmissionLink('');
+    setSubmissionFileUrl('#');
     Swal.fire({
       icon: 'success',
       title: 'Tugas Berhasil Dikirimkan',
@@ -566,21 +604,30 @@ export const TugasPage: React.FC = () => {
                   </div>
                 ))}
 
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Nama file panduan (misal: Rubrik_Penilaian_Praktik.pdf)..."
-                    value={newAttName}
-                    onChange={(e) => setNewAttName(e.target.value)}
-                    className="flex-1 rounded-xl border border-slate-300 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-800 text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddAssignmentAttachment}
-                    className="rounded-xl bg-indigo-600 px-4 py-2 font-bold text-white hover:bg-indigo-700 text-xs"
-                  >
-                    + Lampirkan
-                  </button>
+                {/* Native hidden input */}
+                <input
+                  ref={assignmentFileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.mp4,.zip,.png,.jpg,.jpeg"
+                  onChange={(e) => {
+                    handleAssignmentFilesPicked(e.target.files);
+                    if (e.target) e.target.value = '';
+                  }}
+                  className="hidden"
+                />
+
+                <div
+                  onClick={() => assignmentFileInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-indigo-300 dark:border-indigo-800 bg-white/70 dark:bg-slate-800/60 hover:bg-white hover:border-indigo-500 cursor-pointer transition-all"
+                >
+                  <UploadCloud className="h-5 w-5 text-indigo-600 mb-1" />
+                  <p className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                    Pilih Dokumen Panduan / Jobsheet Tugas dari Perangkat
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    Mendukung PDF, Word DOCX, Slide PPT, Excel (Maks. 50 MB)
+                  </p>
                 </div>
               </div>
 
@@ -649,11 +696,8 @@ export const TugasPage: React.FC = () => {
                 </label>
                 <input
                   type="file"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setUploadedFileName(e.target.files[0].name);
-                    }
-                  }}
+                  accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.mp4,.zip,.png,.jpg,.jpeg"
+                  onChange={(e) => handleStudentFileSelect(e.target.files)}
                   className="w-full text-xs text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-300 cursor-pointer"
                 />
                 <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold mt-1">

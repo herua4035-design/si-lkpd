@@ -48,8 +48,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           { to: '/cp', label: 'Capaian Pembelajaran (CP)', icon: Layers },
           { to: '/tp', label: 'Tujuan Pembelajaran (TP)', icon: Target },
           { to: '/lkpd', label: 'LKPD Interaktif', icon: Compass },
-          { to: '/materi', label: 'Materi Pembelajaran', icon: BookOpen },
-          { to: '/tugas', label: 'Penugasan', icon: FileCheck2 },
+          { to: '/materi', label: 'Unggah & Materi Modul', icon: BookOpen },
+          { to: '/tugas', label: 'Unggah & Penugasan', icon: FileCheck2 },
           {
             to: '/penilaian',
             label: 'Penilaian & Rubrik',
@@ -69,7 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           { to: '/materi', label: 'Materi Pembelajaran', icon: BookOpen },
           {
             to: '/tugas',
-            label: 'Tugas Saya',
+            label: 'Tugas & Unggah Laporan',
             icon: FileCheck2,
             badge: `${activeAssignmentsCount}`,
             badgeColor: 'bg-blue-600 text-white'

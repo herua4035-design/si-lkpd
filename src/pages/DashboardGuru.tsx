@@ -127,22 +127,29 @@ export const DashboardGuru: React.FC = () => {
 
           <div className="mt-5 flex flex-wrap gap-2.5">
             <Link
+              to="/materi"
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-xs font-bold text-blue-700 shadow-md hover:bg-blue-50 transition-all cursor-pointer"
+            >
+              <BookOpen className="h-4 w-4" />
+              Unggah Materi & Modul
+            </Link>
+            <Link
               to="/lkpd"
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-xs font-bold text-blue-700 shadow-md hover:bg-blue-50 transition-all"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-800/60 px-4 py-2 text-xs font-bold text-white hover:bg-blue-800 transition-all border border-blue-400/40 cursor-pointer"
             >
               <Compass className="h-4 w-4" />
               Kelola LKPD Interaktif
             </Link>
             <Link
               to="/tugas"
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-800/60 px-4 py-2 text-xs font-bold text-white hover:bg-blue-800 transition-all border border-blue-400/40"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-800/60 px-4 py-2 text-xs font-bold text-white hover:bg-blue-800 transition-all border border-blue-400/40 cursor-pointer"
             >
               <FileCheck2 className="h-4 w-4" />
-              Buat Tugas Baru
+              Unggah & Buat Tugas
             </Link>
             <Link
               to="/penilaian"
-              className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-orange-600 transition-all"
+              className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-orange-600 transition-all cursor-pointer"
             >
               <Award className="h-4 w-4" />
               Penilaian & Rubrik
