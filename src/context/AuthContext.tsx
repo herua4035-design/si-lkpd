@@ -29,13 +29,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved ? saved === 'dark' : false;
   });
 
-  // Authentication state
+  // Authentication state - strictly default to false so all users must authenticate
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     const saved = localStorage.getItem(IS_AUTH_KEY);
-    return saved !== null ? saved === 'true' : true;
+    return saved === 'true';
   });
 
-  // User state - defaults to Guru (Ahmad Wibowo) for rich testing
+  // User state - defaults to clean state or cached user
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     const saved = localStorage.getItem(AUTH_STORAGE_KEY);
     if (saved) {
@@ -50,7 +50,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const role = currentUser.role;
-
 
   useEffect(() => {
     if (isDarkMode) {
@@ -71,6 +70,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const switchRole = (newRole: UserRole) => {
+    // Strict RBAC: only logged-in Admin can switch roles for simulation
+    if (!isAuthenticated || currentUser.role !== 'admin') {
+      Swal.fire({
+        icon: 'error',
+        title: 'Akses Ditolak',
+        text: 'Hanya Administrator resmi yang memiliki wewenang simulasi peran.'
+      });
+      return;
+    }
+
     let userList: UserProfile[] = INITIAL_USERS;
     const savedDb = localStorage.getItem('si_lkpd_database_store_v5');
     if (savedDb) {
@@ -100,6 +109,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (identifier: string, inputPassword?: string, preferredRole?: UserRole): Promise<{ success: boolean; message?: string }> => {
     const clean = identifier.trim().toLowerCase();
 
+    if (!clean) {
+      return { success: false, message: 'Silakan masukkan email, NIP, atau NISN akun Anda.' };
+    }
+
+    if (!inputPassword || !inputPassword.trim()) {
+      return { success: false, message: 'Kata sandi akun wajib diisi!' };
+    }
+
     // Read latest user accounts from persistent store
     let userList: UserProfile[] = INITIAL_USERS;
     const savedDb = localStorage.getItem('si_lkpd_database_store_v5');
@@ -115,48 +132,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let matched = userList.find(
       (u) =>
         u.email.toLowerCase() === clean ||
-        (clean.includes('heru') && u.uid === 'guru-ahmad-wibowo') ||
-        (clean === 'admin' && u.role === 'admin') ||
-        (clean === 'kepsek' && u.role === 'kepsek') ||
         (u.nip && u.nip.replace(/\s+/g, '') === clean.replace(/\s+/g, '')) ||
         (u.nisn && u.nisn === clean) ||
-        (u.displayName.toLowerCase() === clean)
+        (clean === 'admin' && u.role === 'admin') ||
+        (clean === 'kepsek' && u.role === 'kepsek')
     );
 
     if (!matched) {
       return {
         success: false,
-        message: 'Pengguna dengan email, NIP, NISN, atau Nama tersebut tidak terdaftar di sistem.'
+        message: 'Pengguna dengan identitas tersebut tidak terdaftar di sistem SI-LKPD.'
       };
     }
 
-    // Role category separation validation
-    if (preferredRole && matched.role !== preferredRole) {
-      const roleName =
-        matched.role === 'guru'
-          ? 'Guru'
-          : matched.role === 'murid'
-          ? 'Peserta Didik (Murid)'
-          : matched.role === 'admin'
-          ? 'Administrator'
-          : 'Kepala Sekolah';
+    // =========================================================================
+    // STRICT SECURITY ROLE ISOLATION:
+    // 1. Siswa (Murid) TIDAK BISA masuk ke portal Guru maupun Admin
+    // 2. Guru TIDAK BISA masuk ke portal Admin
+    // 3. Akun non-murid tidak bisa masuk ke portal Siswa
+    // =========================================================================
+
+    // 1. Siswa trying to enter Guru or Admin
+    if (matched.role === 'murid' && preferredRole && preferredRole !== 'murid') {
       return {
         success: false,
-        message: `Akun ini terdaftar sebagai peran "${roleName}". Silakan pilih tab login yang sesuai (${roleName}) untuk masuk.`
+        message: 'KEAMANAN SISTEM: Akses Ditolak! Kredensial Siswa (Peserta Didik) tidak memiliki izin untuk masuk ke portal Guru Pengampu maupun Administrator.'
       };
     }
 
-    // Expected password check (supports Admin customized passwords)
+    // 2. Guru trying to enter Admin or Kepsek
+    if (matched.role === 'guru' && (preferredRole === 'admin' || preferredRole === 'kepsek')) {
+      return {
+        success: false,
+        message: 'KEAMANAN SISTEM: Akses Ditolak! Akun Guru Pengampu tidak memiliki izin wewenang untuk masuk ke portal Administrator / Kepala Sekolah.'
+      };
+    }
+
+    // 3. Non-murid entering through Siswa tab
+    if (preferredRole === 'murid' && matched.role !== 'murid') {
+      return {
+        success: false,
+        message: 'Akses Ditolak: Portal ini khusus untuk Peserta Didik (Siswa). Silakan masuk melalui tab Guru atau Administrator.'
+      };
+    }
+
+    // 4. Role category mismatch
+    if (preferredRole && matched.role !== preferredRole) {
+      const isBothAdmin = (preferredRole === 'admin' && matched.role === 'kepsek') || (preferredRole === 'kepsek' && matched.role === 'admin');
+      if (!isBothAdmin) {
+        return {
+          success: false,
+          message: `Akses Ditolak: Akun (${matched.role.toUpperCase()}) tidak memiliki wewenang pada modul ${preferredRole.toUpperCase()}.`
+        };
+      }
+    }
+
+    // Expected password check
     const expectedPassword = matched.password || (
       matched.role === 'admin' ? 'admin123' :
       matched.role === 'guru' ? 'guru123' :
       matched.role === 'kepsek' ? 'kepsek123' : 'siswa123'
     );
 
-    if (inputPassword && inputPassword.trim() !== expectedPassword.trim()) {
+    if (inputPassword.trim() !== expectedPassword.trim()) {
       return {
         success: false,
-        message: 'Kata sandi salah! Pastikan Anda memasukkan kata sandi yang telah ditetapkan oleh Administrator.'
+        message: 'Kata sandi tidak sesuai! Silakan periksa kembali kata sandi akun Anda atau hubungi Administrator.'
       };
     }
 

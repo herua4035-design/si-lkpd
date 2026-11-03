@@ -34,7 +34,7 @@ import { StudentLookupModal } from '../components/StudentLookupModal';
 import { UserProfile } from '../types';
 
 export const Login: React.FC = () => {
-  const { login, switchRole, isDarkMode, toggleDarkMode } = useAuth();
+  const { login, isDarkMode, toggleDarkMode } = useAuth();
   const navigate = useNavigate();
 
   // Active Role Category Tab: 'guru' | 'murid' | 'admin_kepsek'
@@ -49,24 +49,17 @@ export const Login: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showStudentLookup, setShowStudentLookup] = useState(false);
 
-  // When switching role category, set sensible defaults
+  // When switching role category, clear input fields to prevent unauthorized access
   const handleCategoryChange = (cat: 'guru' | 'murid' | 'admin_kepsek') => {
     setRoleCategory(cat);
     setErrorMsg('');
-    if (cat === 'guru') {
-      setIdentifier('');
-      setPassword('');
-    } else if (cat === 'murid') {
-      setIdentifier('');
-      setPassword('');
-    } else {
-      setIdentifier('admin@smkn1sidayu.sch.id');
-      setPassword('admin123');
-    }
+    setIdentifier('');
+    setPassword('');
   };
+
   const handleSelectStudent = (student: UserProfile) => {
     setIdentifier(student.nisn || student.displayName);
-    setPassword(student.password || 'siswa123');
+    setPassword('');
     setShowStudentLookup(false);
     setErrorMsg('');
     Swal.fire({
@@ -74,7 +67,7 @@ export const Login: React.FC = () => {
       position: 'top-end',
       icon: 'info',
       title: `Siswa Dipilih: ${student.displayName}`,
-      text: `Kelas ${student.className} (NISN: ${student.nisn}). Klik "Masuk ke Portal SI-LKPD".`,
+      text: `NISN: ${student.nisn} (${student.className}). Silakan masukkan kata sandi akun siswa Anda.`,
       showConfirmButton: false,
       timer: 2500,
       timerProgressBar: true
@@ -128,11 +121,6 @@ export const Login: React.FC = () => {
         confirmButtonColor: '#2563eb'
       });
     }
-  };
-
-  const handleQuickLogin = (r: UserRole) => {
-    switchRole(r);
-    navigate('/');
   };
 
   const handleForgotPassword = () => {
@@ -388,7 +376,7 @@ export const Login: React.FC = () => {
                     >
                       <Search className="h-3 w-3" /> Cari Nama / NISN Siswa (394 Siswa Terdaftar)
                     </button>
-                    <span className="text-[10px] text-slate-400">Sandi default: siswa123</span>
+                    <span className="text-[10px] text-slate-400">Gunakan Sandi Siswa</span>
                   </div>
                 )}
               </div>
@@ -441,20 +429,46 @@ export const Login: React.FC = () => {
                     Ingat sesi login saya
                   </span>
                 </label>
-                {roleCategory === 'admin_kepsek' && (
-                  <span className="text-[10px] text-purple-600 dark:text-purple-400 font-mono">
-                    Default: admin123
-                  </span>
-                )}
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                  <span>Autentikasi Terenkripsi</span>
+                </div>
               </div>
+
               {/* Security Isolation Notice for Murid */}
               {roleCategory === 'murid' && (
                 <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
                   <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
                   <div>
-                    <span className="font-bold">Keamanan Pemisahan Peran Aktif:</span>
+                    <span className="font-bold">Keamanan Akses Peserta Didik (Siswa):</span>
                     <p className="text-[10px] text-amber-700 dark:text-amber-300/90 mt-0.5 leading-relaxed">
-                      Siswa hanya dapat mengakses materi, pengerjaan LKPD, pengumpulan tugas, dan nilai rapor pribadi. Akses ke menu guru, penilaian kelas, dan panel admin diblokir otomatis demi integritas data asesmen.
+                      Siswa hanya diizinkan mengakses materi, pengerjaan LKPD, pengumpulan tugas, dan nilai rapor pribadi. Akses ke portal Guru dan Administrator diblokir otomatis demi integritas data asesmen.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Security Isolation Notice for Guru */}
+              {roleCategory === 'guru' && (
+                <div className="rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 p-3 text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2.5">
+                  <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
+                  <div>
+                    <span className="font-bold">Keamanan Akses Guru Pengampu:</span>
+                    <p className="text-[10px] text-blue-700 dark:text-blue-300/90 mt-0.5 leading-relaxed">
+                      Portal ini dikhususkan bagi pendidik untuk manajemen pembelajaran, CP/TP, dan penilaian kelas. Kredensial siswa ditolak. Akun guru juga tidak diizinkan masuk ke portal Administrator.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Security Isolation Notice for Admin & Kepsek */}
+              {roleCategory === 'admin_kepsek' && (
+                <div className="rounded-2xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 p-3 text-xs text-purple-900 dark:text-purple-200 flex items-start gap-2.5">
+                  <Lock className="h-4 w-4 shrink-0 mt-0.5 text-purple-600 dark:text-purple-400" />
+                  <div>
+                    <span className="font-bold">Keamanan Ketat Administrator Sistem:</span>
+                    <p className="text-[10px] text-purple-700 dark:text-purple-300/90 mt-0.5 leading-relaxed">
+                      Portal ini memiliki hak kelola tingkat tinggi (manajemen akun, database, dan struktur kurikulum). Akses dibatasi secara eksklusif untuk Admin & Kepala Sekolah. Kredensial Siswa dan Guru diblokir total.
                     </p>
                   </div>
                 </div>
@@ -464,10 +478,10 @@ export const Login: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3.5 text-xs font-bold text-white shadow-lg shadow-blue-500/30 hover:from-blue-700 hover:to-indigo-700 active:scale-98 transition-all disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3.5 text-xs font-bold text-white shadow-lg shadow-blue-500/30 hover:from-blue-700 hover:to-indigo-700 active:scale-98 transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isLoading ? (
-                  <span>Memverifikasi Kredensial...</span>
+                  <span>Memverifikasi Hak Akses & Kredensial...</span>
                 ) : (
                   <>
                     <span>Masuk ke Portal SI-LKPD</span>
@@ -477,50 +491,15 @@ export const Login: React.FC = () => {
               </button>
             </form>
 
-            {/* Quick Demo Access Bar (Hanya tampil pada Tab Admin / Kepsek untuk Administrator) */}
-            {roleCategory === 'admin_kepsek' && (
-              <div className="mt-6 pt-5 border-t border-purple-100 dark:border-purple-900/40 space-y-3 animate-in fade-in duration-200">
-                <div className="flex items-center justify-between text-xs font-bold text-purple-700 dark:text-purple-300">
-                  <span className="flex items-center gap-1.5">
-                    <Shield className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-                    Akses Cepat Pengujian (Khusus Administrator & Kepsek):
-                  </span>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300">
-                    Khusus Admin
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('admin')}
-                    className="flex items-center gap-2 rounded-xl bg-purple-50/70 p-2.5 text-left border border-purple-100 hover:border-purple-400 hover:shadow-xs transition-all dark:bg-purple-950/20 dark:border-purple-900/40 cursor-pointer"
-                  >
-                    <div className="rounded-lg bg-purple-100 p-1.5 text-purple-600 dark:bg-purple-900/50 dark:text-purple-300">
-                      <Shield className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900 dark:text-white">Admin</p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Bambang S., M.Pd</p>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('kepsek')}
-                    className="flex items-center gap-2 rounded-xl bg-amber-50/70 p-2.5 text-left border border-amber-100 hover:border-amber-400 hover:shadow-xs transition-all dark:bg-amber-950/20 dark:border-amber-900/40 cursor-pointer"
-                  >
-                    <div className="rounded-lg bg-amber-100 p-1.5 text-amber-600 dark:bg-amber-900/50 dark:text-amber-300">
-                      <UserCheck className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900 dark:text-white">Kepsek</p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Arni Sulistyowati</p>
-                    </div>
-                  </button>
+            {/* Security Isolation Policy Card */}
+            <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-3 border border-slate-200/70 dark:border-slate-800 flex items-start gap-2.5">
+                <Lock className="h-4 w-4 text-slate-500 dark:text-slate-400 shrink-0 mt-0.5" />
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  <span className="font-bold text-slate-700 dark:text-slate-300">Pemisahan Hak Akses Role-Based Access Control (RBAC):</span> Sistem secara aktif memverifikasi kesesuaian peran saat login. Siswa tidak dapat mengakses modul Guru atau Admin, dan Guru tidak dapat mengakses modul Admin.
                 </div>
               </div>
-            )}
+            </div>
           </div>
 
           {/* Security & System Status Footer */}

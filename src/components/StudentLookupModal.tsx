@@ -167,8 +167,8 @@ export const StudentLookupModal: React.FC<StudentLookupModalProps> = ({
         {/* Footer Info */}
         <div className="border-t border-slate-100 dark:border-slate-800 p-3.5 bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between text-xs text-slate-500">
           <span className="flex items-center gap-1.5">
-            <KeyRound className="h-3.5 w-3.5 text-amber-500" />
-            Sandi Default Siswa: <code className="font-bold text-slate-800 dark:text-slate-200">siswa123</code>
+            <GraduationCap className="h-3.5 w-3.5 text-emerald-500" />
+            <span>Terdaftar Resmi di Database Siswa SMKN 1 Sidayu (T.A. 2026/2027)</span>
           </span>
           <span className="text-[11px]">
             Ditemukan: <strong className="text-slate-800 dark:text-white">{filteredStudents.length}</strong> siswa
