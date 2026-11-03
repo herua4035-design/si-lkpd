@@ -31,6 +31,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { StudentLookupModal } from '../components/StudentLookupModal';
+import { TeacherLookupModal } from '../components/TeacherLookupModal';
 import { UserProfile } from '../types';
 
 export const Login: React.FC = () => {
@@ -48,6 +49,8 @@ export const Login: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showStudentLookup, setShowStudentLookup] = useState(false);
+  const [showTeacherLookup, setShowTeacherLookup] = useState(false);
+  const [selectedTeacherInfo, setSelectedTeacherInfo] = useState<{ name: string; nip: string; mapel?: string } | null>(null);
 
   // When switching role category, clear input fields to prevent unauthorized access
   const handleCategoryChange = (cat: 'guru' | 'murid' | 'admin_kepsek') => {
@@ -55,6 +58,26 @@ export const Login: React.FC = () => {
     setErrorMsg('');
     setIdentifier('');
     setPassword('');
+    setSelectedTeacherInfo(null);
+  };
+
+  const handleSelectTeacher = (teacher: { name: string; nip: string; mapel?: string; email?: string }) => {
+    const cleanNip = teacher.nip.replace(/\s+/g, '');
+    setIdentifier(cleanNip);
+    setPassword('');
+    setSelectedTeacherInfo(teacher);
+    setShowTeacherLookup(false);
+    setErrorMsg('');
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'info',
+      title: `Pendidik Dipilih: ${teacher.name}`,
+      text: `NIP: ${teacher.nip} (${teacher.mapel || 'Guru Pengampu'}). Format sandi: Guru${cleanNip.slice(-4)}!`,
+      showConfirmButton: false,
+      timer: 3000,
+      timerProgressBar: true
+    });
   };
 
   const handleSelectStudent = (student: UserProfile) => {
@@ -367,6 +390,33 @@ export const Login: React.FC = () => {
                     className="w-full rounded-2xl border border-slate-300 pl-10 pr-4 py-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 outline-none transition-all font-medium"
                   />
                 </div>
+                {roleCategory === 'guru' && (
+                  <div className="mt-2.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setShowTeacherLookup(true)}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      >
+                        <Search className="h-3 w-3" /> Cari Nama / NIP Guru (65 Pendidik Resmi SMKN 1 Sidayu)
+                      </button>
+                      <span className="text-[10px] text-slate-400">Pilih Identitas</span>
+                    </div>
+                    {selectedTeacherInfo && (
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-[11px] animate-fadeIn">
+                        <div>
+                          <span className="font-bold text-blue-900 dark:text-blue-200">{selectedTeacherInfo.name}</span>
+                          <span className="text-slate-500 dark:text-slate-400 block text-[10px]">
+                            NIP: {selectedTeacherInfo.nip} • {selectedTeacherInfo.mapel || 'Guru Pengampu'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200 font-mono font-bold px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-700">
+                          Format: Guru{selectedTeacherInfo.nip.replace(/\s+/g, '').slice(-4)}!
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {roleCategory === 'murid' && (
                   <div className="mt-2 flex items-center justify-between">
                     <button
@@ -400,7 +450,13 @@ export const Login: React.FC = () => {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    placeholder="Masukkan kata sandi akun"
+                    placeholder={
+                      roleCategory === 'guru'
+                        ? 'Contoh: Guru1002! (Guru + 4 digit akhir NIP + !)'
+                        : roleCategory === 'murid'
+                        ? 'Kata sandi siswa (default: siswa123)'
+                        : 'Kata sandi administrator'
+                    }
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full rounded-2xl border border-slate-300 pl-10 pr-11 py-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 outline-none transition-all font-mono"
@@ -414,6 +470,13 @@ export const Login: React.FC = () => {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                  {roleCategory === 'guru'
+                    ? 'Format kata sandi guru: Guru + 4 digit akhir NIP + tanda seru ! (Misal NIP berakhiran 1002 kata sandi adalah Guru1002!).'
+                    : roleCategory === 'murid'
+                    ? 'Default kata sandi siswa: siswa123 (kecuali telah diubah di profil).'
+                    : 'Gunakan kredensial akun administrator resmi SMKN 1 Sidayu.'}
+                </p>
               </div>
 
               {/* Remember Me */}
@@ -523,6 +586,13 @@ export const Login: React.FC = () => {
         isOpen={showStudentLookup}
         onClose={() => setShowStudentLookup(false)}
         onSelectStudent={handleSelectStudent}
+      />
+
+      {/* Official Teacher Lookup Modal (65 Official SMKN 1 Sidayu Teachers) */}
+      <TeacherLookupModal
+        isOpen={showTeacherLookup}
+        onClose={() => setShowTeacherLookup(false)}
+        onSelectTeacher={handleSelectTeacher}
       />
     </div>
   );

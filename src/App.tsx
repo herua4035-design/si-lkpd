@@ -179,11 +179,11 @@ const AppRoutes: React.FC = () => {
         }
       />
 
-      {/* Strictly RESTRICTED for Murid: Class Management */}
+      {/* Teams Classroom & Class Management: Open to all authenticated users (students read-only / participate in discussions) */}
       <Route
         path="/kelas"
         element={
-          <RoleRoute allowedRoles={['guru', 'kepsek', 'admin']}>
+          <RoleRoute allowedRoles={['guru', 'murid', 'kepsek', 'admin']}>
             <ClassPage />
           </RoleRoute>
         }

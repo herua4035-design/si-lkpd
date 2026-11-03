@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { LearningMaterial, MaterialType } from '../types';
+import { LearningMaterial, MaterialType, AttachmentItem } from '../types';
+import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
 import {
   BookOpen,
   Plus,
@@ -16,7 +17,14 @@ import {
   Eye,
   Filter,
   X,
-  Search
+  Search,
+  Paperclip,
+  Upload,
+  UserCheck,
+  CheckCircle2,
+  FileSpreadsheet,
+  Layers,
+  GraduationCap
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
@@ -26,7 +34,9 @@ export const MateriPage: React.FC = () => {
 
   const [filterType, setFilterType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [onlyMyMaterials, setOnlyMyMaterials] = useState(role === 'guru');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<any | null>(null);
 
   // Subjects taught by current logged-in teacher
   const teacherSubjects: string[] = currentUser.subjectsTaught && currentUser.subjectsTaught.length > 0
@@ -41,8 +51,21 @@ export const MateriPage: React.FC = () => {
   const [subject, setSubject] = useState(teacherSubjects[0] || 'Koding dan Kecerdasan Artifisial');
   const [type, setType] = useState<MaterialType>('pdf');
   const [youtubeId, setYoutubeId] = useState('jC4v5AS4RIM');
-  const [fileName, setFileName] = useState('Modul_Ajar_SMKN1Sidayu.pdf');
   const [selectedClassId, setSelectedClassId] = useState(classes[0]?.id || 'class-x-tkj-1');
+
+  // Multi-attachment items
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([
+    {
+      id: 'att-default-1',
+      name: 'Modul_Ajar_SMKN1Sidayu_2026.pdf',
+      url: '#',
+      type: 'pdf',
+      size: '2.8 MB',
+      uploadedAt: new Date().toISOString()
+    }
+  ]);
+  const [newAttachmentName, setNewAttachmentName] = useState('');
+  const [externalLinkUrl, setExternalLinkUrl] = useState('');
 
   const canManage = role === 'guru' || role === 'admin';
 
@@ -50,9 +73,38 @@ export const MateriPage: React.FC = () => {
     const matchesType = filterType === 'all' || m.type === filterType;
     const matchesSearch =
       m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesType && matchesSearch;
+      m.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.teacherName && m.teacherName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      m.subject.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesMyMaterials =
+      !onlyMyMaterials ||
+      role !== 'guru' ||
+      m.teacherId === currentUser.uid ||
+      m.teacherName?.toLowerCase() === currentUser.displayName.toLowerCase();
+
+    return matchesType && matchesSearch && matchesMyMaterials;
   });
+
+  const handleAddAttachment = () => {
+    if (!newAttachmentName.trim()) return;
+    const ext = newAttachmentName.split('.').pop()?.toLowerCase() || 'pdf';
+    const newAtt: AttachmentItem = {
+      id: `att-${Date.now()}`,
+      name: newAttachmentName.trim(),
+      url: externalLinkUrl.trim() || '#',
+      type: ext === 'docx' ? 'docx' : ext === 'pptx' ? 'pptx' : ext === 'mp4' ? 'video' : 'pdf',
+      size: `${(Math.random() * 4 + 1).toFixed(1)} MB`,
+      uploadedAt: new Date().toISOString()
+    };
+    setAttachments((prev) => [...prev, newAtt]);
+    setNewAttachmentName('');
+    setExternalLinkUrl('');
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  };
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +117,10 @@ export const MateriPage: React.FC = () => {
       classIds: [selectedClassId],
       type,
       youtubeId: type === 'youtube' ? youtubeId : undefined,
-      fileName: type !== 'youtube' ? fileName : undefined,
+      fileName: attachments[0]?.name || `${title.replace(/\s+/g, '_')}.pdf`,
+      fileSize: attachments[0]?.size || '2.8 MB',
+      attachments: attachments.length > 0 ? attachments : undefined,
+      externalLink: externalLinkUrl || undefined,
       fileUrl: '#',
       tpId: 'tp-01',
       teacherId: currentUser.uid,
@@ -73,11 +128,24 @@ export const MateriPage: React.FC = () => {
     });
 
     setShowAddModal(false);
+    setTitle('');
+    setDescription('');
+    setAttachments([
+      {
+        id: `att-${Date.now()}`,
+        name: 'Modul_Ajar_SMKN1Sidayu_2026.pdf',
+        url: '#',
+        type: 'pdf',
+        size: '2.8 MB',
+        uploadedAt: new Date().toISOString()
+      }
+    ]);
+
     Swal.fire({
       icon: 'success',
-      title: 'Materi Diterbitkan',
-      text: 'Peserta didik telah menerima notifikasi materi pembelajaran baru.',
-      timer: 1600,
+      title: 'Materi Pembelajaran Diterbitkan',
+      text: 'Dokumen modul dan lampiran telah disinkronkan ke ruang kelas peserta didik.',
+      timer: 1800,
       showConfirmButton: false
     });
   };
@@ -85,7 +153,7 @@ export const MateriPage: React.FC = () => {
   const handleDelete = (id: string, titleStr: string) => {
     Swal.fire({
       title: `Hapus materi?`,
-      text: `"${titleStr}" akan dihapus.`,
+      text: `"${titleStr}" akan dihapus dari repositori.`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#ef4444',
@@ -116,56 +184,71 @@ export const MateriPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs dark:border-slate-800 dark:bg-slate-900">
         <div>
           <div className="flex items-center gap-2">
-            <span className="rounded-md bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-              REPOSITORI PEMBELAJARAN
+            <span className="rounded-full bg-blue-100 px-3 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+              LMS ADVANCED REPOSITORY
             </span>
-            <span className="rounded-md bg-orange-100 px-2.5 py-0.5 text-xs font-bold text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
-              MULTI-FORMAT
+            <span className="rounded-full bg-indigo-100 px-3 py-0.5 text-xs font-bold text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+              SMKN 1 SIDAYU
             </span>
           </div>
-          <h1 className="mt-2 text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
-            Materi Pembelajaran Daring
+          <h1 className="mt-2 text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+            Materi Pembelajaran Daring & Modul LMS
           </h1>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Akses modul PDF, presentasi PPT, berkas DOCX, rekaman video, gambar, dan embed YouTube interaktif.
+            Akses dan distribusi multi-lampiran dokumen modul PDF, slide presentasi PPTX, berkas DOCX, jobsheet, dan media interaktif.
           </p>
         </div>
 
         {canManage && (
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-600/30 hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-600/30 hover:bg-indigo-700 transition-all cursor-pointer"
           >
             <Plus className="h-4 w-4" />
-            Upload Materi Baru
+            <span>Upload & Terbitkan Materi</span>
           </button>
         )}
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 shadow-xs">
         {/* Search */}
-        <div className="relative min-w-[260px] flex-1 max-w-md">
+        <div className="relative min-w-[240px] flex-1 max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Cari materi atau topik bahasan..."
+            placeholder="Cari materi, nama guru, atau topik..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 shadow-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white font-medium"
           />
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        {/* Filter Pills & Scoping Toggle */}
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {role === 'guru' && (
+            <button
+              type="button"
+              onClick={() => setOnlyMyMaterials(!onlyMyMaterials)}
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-bold transition-all cursor-pointer ${
+                onlyMyMaterials
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+              }`}
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              <span>⭐ Materi Saya</span>
+            </button>
+          )}
+
           {[
-            { id: 'all', label: 'Semua Format' },
+            { id: 'all', label: 'Semua' },
             { id: 'pdf', label: 'PDF Modul' },
             { id: 'ppt', label: 'Slide PPT' },
-            { id: 'youtube', label: 'YouTube Video' },
+            { id: 'youtube', label: 'YouTube' },
             { id: 'docx', label: 'DOCX' },
             { id: 'video', label: 'Video MP4' },
           ].map((pill) => (
@@ -174,8 +257,8 @@ export const MateriPage: React.FC = () => {
               onClick={() => setFilterType(pill.id)}
               className={`rounded-xl px-3 py-1.5 font-semibold transition-all ${
                 filterType === pill.id
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
               }`}
             >
               {pill.label}
@@ -186,104 +269,158 @@ export const MateriPage: React.FC = () => {
 
       {/* Materials Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredMaterials.map((mat) => (
-          <div
-            key={mat.id}
-            className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-xs transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
-          >
-            <div>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="rounded-xl bg-slate-100 p-2.5 dark:bg-slate-800">
-                    {getFormatIcon(mat.type)}
+        {filteredMaterials.map((mat) => {
+          const allAttachments = mat.attachments && mat.attachments.length > 0
+            ? mat.attachments
+            : mat.fileName
+            ? [{ id: 'main', name: mat.fileName, size: mat.fileSize || '2.8 MB', type: mat.type, url: mat.fileUrl }]
+            : [];
+
+          return (
+            <div
+              key={mat.id}
+              className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-5 shadow-xs transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900 space-y-4"
+            >
+              <div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="rounded-2xl bg-slate-100 p-2.5 dark:bg-slate-800">
+                      {getFormatIcon(mat.type)}
+                    </div>
+                    <div>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300 uppercase">
+                        {mat.type}
+                      </span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                        {new Date(mat.createdAt).toLocaleDateString('id-ID')}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300 uppercase">
-                      {mat.type}
-                    </span>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">
-                      {new Date(mat.createdAt).toLocaleDateString('id-ID')}
-                    </span>
-                  </div>
+
+                  {canManage && (
+                    <button
+                      onClick={() => handleDelete(mat.id, mat.title)}
+                      className="rounded-lg p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                      title="Hapus Materi"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
 
-                {canManage && (
-                  <button
-                    onClick={() => handleDelete(mat.id, mat.title)}
-                    className="rounded-lg p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-                    title="Hapus Materi"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                <div className="mt-3">
+                  <span className="inline-block rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 px-2 py-0.5 text-[10px] font-bold mb-1">
+                    {mat.subject}
+                  </span>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white line-clamp-2">
+                    {mat.title}
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed">
+                    {mat.description}
+                  </p>
+                </div>
+
+                {/* YouTube Embed preview if applicable */}
+                {mat.type === 'youtube' && mat.youtubeId && (
+                  <div className="mt-3 aspect-video w-full overflow-hidden rounded-2xl bg-black">
+                    <iframe
+                      src={`https://www.youtube.com/embed/${mat.youtubeId}`}
+                      title={mat.title}
+                      className="h-full w-full border-0"
+                      allowFullScreen
+                    />
+                  </div>
+                )}
+
+                {/* Attachments List */}
+                {allAttachments.length > 0 && (
+                  <div className="mt-3 space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                      <Paperclip className="h-3 w-3" /> Berkas Lampiran ({allAttachments.length}):
+                    </span>
+                    <div className="space-y-1">
+                      {allAttachments.map((att, i) => (
+                        <div
+                          key={att.id || i}
+                          className="flex items-center justify-between rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2 text-xs text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-800"
+                        >
+                          <div className="flex items-center gap-1.5 truncate">
+                            <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                            <span className="truncate text-[11px] font-medium">{att.name}</span>
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-400 shrink-0 ml-2">
+                            {att.size || '2.8 MB'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
 
-              <h3 className="mt-3 text-sm font-bold text-slate-900 dark:text-white line-clamp-2">
-                {mat.title}
-              </h3>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed">
-                {mat.description}
-              </p>
+              {/* Footer */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                <span className="text-slate-500 text-[11px] font-medium truncate max-w-[130px]">
+                  👤 {mat.teacherName}
+                </span>
 
-              {/* YouTube Embed preview if applicable */}
-              {mat.type === 'youtube' && mat.youtubeId && (
-                <div className="mt-3 aspect-video w-full overflow-hidden rounded-xl bg-black">
-                  <iframe
-                    src={`https://www.youtube.com/embed/${mat.youtubeId}`}
-                    title={mat.title}
-                    className="h-full w-full border-0"
-                    allowFullScreen
-                  />
+                <div className="flex items-center gap-2">
+                  {mat.type === 'youtube' ? (
+                    <a
+                      href={`https://www.youtube.com/watch?v=${mat.youtubeId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 font-bold text-red-600 hover:underline dark:text-red-400 text-xs"
+                    >
+                      <Youtube className="h-3.5 w-3.5" /> Buka YouTube
+                    </a>
+                  ) : (
+                    <button
+                      onClick={() =>
+                        setPreviewAttachment({
+                          name: allAttachments[0]?.name || `${mat.title}.pdf`,
+                          size: allAttachments[0]?.size || mat.fileSize || '2.8 MB',
+                          type: mat.type,
+                          url: allAttachments[0]?.url || mat.fileUrl
+                        })
+                      }
+                      className="flex items-center gap-1.5 rounded-xl bg-indigo-50 px-3 py-1.5 font-bold text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300 transition-colors cursor-pointer"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      <span>Buka & Unduh</span>
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-              <span className="text-slate-400 text-[11px] truncate max-w-[140px]">
-                {mat.teacherName}
-              </span>
-
-              {mat.type === 'youtube' ? (
-                <a
-                  href={`https://www.youtube.com/watch?v=${mat.youtubeId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 font-bold text-red-600 hover:underline dark:text-red-400 text-xs"
-                >
-                  <Youtube className="h-3.5 w-3.5" /> Buka YouTube
-                </a>
-              ) : (
-                <button
-                  onClick={() => {
-                    Swal.fire({
-                      icon: 'info',
-                      title: 'Membuka Berkas Modul',
-                      text: `Mengunduh berkas "${mat.fileName || mat.title}"`,
-                      timer: 1500,
-                      showConfirmButton: false
-                    });
-                  }}
-                  className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 font-bold text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300"
-                >
-                  <Download className="h-3.5 w-3.5" /> Unduh Berkas
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Modal Upload Materi */}
+      {filteredMaterials.length === 0 && (
+        <div className="rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 p-12 text-center text-slate-400">
+          <BookOpen className="h-12 w-12 mx-auto text-slate-300 mb-3" />
+          <p className="font-bold text-sm text-slate-600 dark:text-slate-300">
+            Tidak ada materi pembelajaran yang ditemukan.
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            Gunakan tombol "Upload & Terbitkan Materi" untuk menambahkan modul ajar baru.
+          </p>
+        </div>
+      )}
+
+      {/* Modal Upload Materi (Advanced LMS Uploader) */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                Upload & Terbitkan Materi Pembelajaran
+              <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                <Upload className="h-5 w-5 text-indigo-600" />
+                Upload & Terbitkan Materi Pembelajaran Baru
               </h2>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -292,26 +429,26 @@ export const MateriPage: React.FC = () => {
             <form onSubmit={handleCreate} className="mt-4 space-y-4 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Judul Materi
+                  Judul Materi Pembelajaran
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Contoh: Modul Ajar: Pembuatan API dengan Node.js..."
+                  placeholder="Contoh: Modul Ajar: Pembuatan REST API dengan Express.js & TypeScript"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 p-2.5 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="w-full rounded-2xl border border-slate-300 p-3 dark:border-slate-700 dark:bg-slate-800 dark:text-white font-medium"
                 />
               </div>
 
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Mata Pelajaran (17 Mapel Resmi SMKN 1 Sidayu)
+                  Mata Pelajaran (Kurikulum Merdeka SMKN 1 Sidayu)
                 </label>
                 {teacherSubjects.length > 1 && (
                   <div className="mb-2">
-                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                      Pilihan Cepat Mapel Anda:
+                    <p className="text-[11px] font-semibold text-slate-500 mb-1">
+                      Pilihan Cepat Mapel Ampuan Anda:
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {teacherSubjects.map((sName) => (
@@ -319,10 +456,10 @@ export const MateriPage: React.FC = () => {
                           key={sName}
                           type="button"
                           onClick={() => setSubject(sName)}
-                          className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all ${
+                          className={`rounded-xl px-2.5 py-1 text-xs font-bold transition-all ${
                             subject === sName
-                              ? 'bg-blue-600 text-white shadow-xs'
-                              : 'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300'
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                           }`}
                         >
                           ⭐ {sName}
@@ -334,7 +471,7 @@ export const MateriPage: React.FC = () => {
                 <select
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 p-2.5 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="w-full rounded-2xl border border-slate-300 p-3 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 >
                   {subjects.map((s) => (
                     <option key={s.id} value={s.name}>
@@ -347,30 +484,30 @@ export const MateriPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Format Konten
+                    Format Konten Utama
                   </label>
                   <select
                     value={type}
                     onChange={(e) => setType(e.target.value as MaterialType)}
-                    className="w-full rounded-xl border border-slate-300 p-2.5 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-2xl border border-slate-300 p-3 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   >
-                    <option value="pdf">Dokumen PDF</option>
-                    <option value="ppt">Slide Presentasi PPT</option>
+                    <option value="pdf">Dokumen PDF Modul</option>
+                    <option value="ppt">Slide Presentasi PPTX</option>
                     <option value="docx">Dokumen Word DOCX</option>
                     <option value="youtube">Embed Video YouTube</option>
                     <option value="video">File Video MP4</option>
-                    <option value="image">Gambar / Infografis</option>
+                    <option value="image">Infografis / Gambar</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Kelas Sasaran
+                    Target Kelas Sasaran
                   </label>
                   <select
                     value={selectedClassId}
                     onChange={(e) => setSelectedClassId(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 p-2.5 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-2xl border border-slate-300 p-3 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   >
                     {classes.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -381,60 +518,102 @@ export const MateriPage: React.FC = () => {
                 </div>
               </div>
 
-              {type === 'youtube' ? (
+              {type === 'youtube' && (
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    YouTube Video ID atau URL
+                    YouTube Video ID atau URL Lengkap
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="Contoh: jC4v5AS4RIM"
+                    placeholder="Contoh: jC4v5AS4RIM atau https://youtube.com/watch?v=..."
                     value={youtubeId}
                     onChange={(e) => setYoutubeId(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 p-2.5 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Nama Berkas Lampiran
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={fileName}
-                    onChange={(e) => setFileName(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 p-2.5 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-2xl border border-slate-300 p-3 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
               )}
 
+              {/* Advanced Multi-Attachment File Uploader */}
+              <div className="rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="font-extrabold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                    <Paperclip className="h-4 w-4 text-indigo-600" />
+                    Lampirkan Dokumen & File Pelengkap (LMS Attachments)
+                  </label>
+                  <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">
+                    {attachments.length} Terlampir
+                  </span>
+                </div>
+
+                {/* List of currently attached files */}
+                {attachments.map((att) => (
+                  <div
+                    key={att.id}
+                    className="flex items-center justify-between rounded-xl bg-white dark:bg-slate-800 p-2.5 border border-indigo-100 dark:border-indigo-900 shadow-xs"
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <FileText className="h-4 w-4 text-indigo-600 shrink-0" />
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate">
+                        {att.name}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">({att.size})</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveAttachment(att.id)}
+                      className="text-slate-400 hover:text-rose-500 p-1"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Quick Add Attachment Row */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Nama file / dokumen (misal: Jobsheet_Praktikum.docx)..."
+                    value={newAttachmentName}
+                    onChange={(e) => setNewAttachmentName(e.target.value)}
+                    className="flex-1 rounded-xl border border-slate-300 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-800 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddAttachment}
+                    className="rounded-xl bg-indigo-600 px-4 py-2 font-bold text-white hover:bg-indigo-700 cursor-pointer text-xs"
+                  >
+                    + Lampirkan
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Deskripsi Singkat Materi
+                  Deskripsi & Petunjuk Belajar Mandiri
                 </label>
                 <textarea
                   rows={3}
                   required
-                  placeholder="Jelaskan ringkasan materi dan instruksi belajar mandiri..."
+                  placeholder="Tuliskan tujuan materi, langkah kegiatan belajar, dan referensi bacaan..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 p-2.5 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="w-full rounded-2xl border border-slate-300 p-3 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="rounded-xl px-4 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300"
+                  className="rounded-2xl px-4 py-2.5 text-slate-600 hover:bg-slate-100 dark:text-slate-300"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-blue-600 px-5 py-2 font-bold text-white hover:bg-blue-700 shadow-md shadow-blue-600/30"
+                  className="rounded-2xl bg-indigo-600 px-5 py-2.5 font-bold text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/30"
                 >
                   Terbitkan Materi
                 </button>
@@ -443,6 +622,13 @@ export const MateriPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Document Preview Modal */}
+      <DocumentPreviewModal
+        isOpen={!!previewAttachment}
+        onClose={() => setPreviewAttachment(null)}
+        attachment={previewAttachment}
+      />
     </div>
   );
 };

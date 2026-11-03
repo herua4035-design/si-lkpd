@@ -44,7 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         return [
           { to: '/', label: 'Beranda Guru', icon: LayoutDashboard },
           { to: '/guru-mapel', label: 'Data Guru & Mapel', icon: Users, badge: '65', badgeColor: 'bg-blue-100 text-blue-700' },
-          { to: '/kelas', label: 'Data Kelas (32)', icon: Layers },
+          { to: '/kelas', label: 'Ruang Kelas (Teams)', icon: Layers, badge: 'Teams', badgeColor: 'bg-indigo-600 text-white' },
           { to: '/cp', label: 'Capaian Pembelajaran (CP)', icon: Layers },
           { to: '/tp', label: 'Tujuan Pembelajaran (TP)', icon: Target },
           { to: '/lkpd', label: 'LKPD Interaktif', icon: Compass },
@@ -64,6 +64,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       case 'murid':
         return [
           { to: '/', label: 'Beranda Murid', icon: LayoutDashboard },
+          { to: '/kelas', label: 'Ruang Kelas (Teams)', icon: Layers, badge: 'Teams', badgeColor: 'bg-indigo-600 text-white' },
           { to: '/lkpd', label: 'LKPD Interaktif', icon: Compass },
           { to: '/materi', label: 'Materi Pembelajaran', icon: BookOpen },
           {
