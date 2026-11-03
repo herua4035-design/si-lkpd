@@ -6,6 +6,7 @@ import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
 import {
   BookOpen,
   Plus,
+  Edit2,
   FileText,
   Video,
   Presentation,
@@ -30,7 +31,7 @@ import {
 import Swal from 'sweetalert2';
 
 export const MateriPage: React.FC = () => {
-  const { materials, addMaterial, deleteMaterial, classes, tpList, subjects } = useData();
+  const { materials, addMaterial, updateMaterial, deleteMaterial, classes, tpList, subjects } = useData();
   const { role, currentUser } = useAuth();
 
   const [filterType, setFilterType] = useState<string>('all');
@@ -68,6 +69,18 @@ export const MateriPage: React.FC = () => {
   const [externalLinkUrl, setExternalLinkUrl] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Edit Material state
+  const [editingMaterial, setEditingMaterial] = useState<LearningMaterial | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editSubject, setEditSubject] = useState('');
+  const [editType, setEditType] = useState<MaterialType>('pdf');
+  const [editYoutubeId, setEditYoutubeId] = useState('');
+  const [editClassId, setEditClassId] = useState('');
+  const [editAttachments, setEditAttachments] = useState<AttachmentItem[]>([]);
+  const [editExternalLink, setEditExternalLink] = useState('');
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   const canManage = role === 'guru' || role === 'admin';
 
@@ -248,6 +261,75 @@ export const MateriPage: React.FC = () => {
     });
   };
 
+  const handleOpenEdit = (mat: LearningMaterial) => {
+    setEditingMaterial(mat);
+    setEditTitle(mat.title);
+    setEditDescription(mat.description);
+    setEditSubject(mat.subject);
+    setEditType(mat.type);
+    setEditYoutubeId(mat.youtubeId || '');
+    setEditClassId(mat.classIds[0] || 'all');
+    const existingAtts: AttachmentItem[] =
+      mat.attachments && mat.attachments.length > 0
+        ? [...mat.attachments]
+        : mat.fileName
+        ? [{ id: 'main', name: mat.fileName, size: mat.fileSize || '2.8 MB', type: mat.type, url: mat.fileUrl }]
+        : [];
+    setEditAttachments(existingAtts);
+    setEditExternalLink(mat.externalLink || (mat.fileUrl?.startsWith('http') ? mat.fileUrl : ''));
+  };
+
+  const handleEditFilesSelected = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      const detected = detectFileType(file.name);
+      reader.onload = (e) => {
+        const dataUrl = (e.target?.result as string) || '#';
+        const newAtt: AttachmentItem = {
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: file.name,
+          url: dataUrl,
+          type: detected,
+          size: formatFileSize(file.size),
+          uploadedAt: new Date().toISOString()
+        };
+        setEditAttachments((prev) => [...prev, newAtt]);
+        setEditType(detected);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleSaveEditMaterial = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMaterial || !editTitle.trim()) return;
+
+    const mainFile = editAttachments[0];
+    updateMaterial(editingMaterial.id, {
+      title: editTitle,
+      description: editDescription,
+      subject: editSubject,
+      classIds: [editClassId],
+      type: mainFile ? (mainFile.type as MaterialType) : editType,
+      youtubeId: editType === 'youtube' ? editYoutubeId : undefined,
+      fileName: mainFile?.name || editingMaterial.fileName,
+      fileSize: mainFile?.size || editingMaterial.fileSize,
+      attachments: editAttachments.length > 0 ? editAttachments : undefined,
+      externalLink: editExternalLink || undefined,
+      fileUrl: editType === 'link' ? editExternalLink : mainFile?.url || editingMaterial.fileUrl
+    });
+
+    setEditingMaterial(null);
+    Swal.fire({
+      icon: 'success',
+      title: 'Materi Berhasil Diperbarui',
+      text: `Perubahan modul/materi "${editTitle}" berhasil disimpan.`,
+      timer: 1600,
+      showConfirmButton: false
+    });
+  };
+
   const getFormatIcon = (format: MaterialType) => {
     switch (format) {
       case 'pdf':
@@ -383,13 +465,22 @@ export const MateriPage: React.FC = () => {
                   </div>
 
                   {canManage && (
-                    <button
-                      onClick={() => handleDelete(mat.id, mat.title)}
-                      className="rounded-lg p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-                      title="Hapus Materi"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleOpenEdit(mat)}
+                        className="rounded-lg p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
+                        title="Edit Materi"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(mat.id, mat.title)}
+                        className="rounded-lg p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                        title="Hapus Materi"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -765,6 +856,229 @@ export const MateriPage: React.FC = () => {
                   className="rounded-2xl bg-indigo-600 px-5 py-2.5 font-bold text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/30"
                 >
                   Terbitkan Materi
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Material Modal */}
+      {editingMaterial && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+          <div className="my-8 w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600">
+                  <Edit2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                    Edit Materi / Modul Ajar
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Perbarui judul, mata pelajaran, target rombel, atau lampiran dokumen
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingMaterial(null)}
+                className="rounded-xl p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditMaterial} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Judul Modul / Materi Pembelajaran
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Mata Pelajaran
+                  </label>
+                  <select
+                    value={editSubject}
+                    onChange={(e) => setEditSubject(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  >
+                    {subjects && subjects.length > 0 ? (
+                      subjects.map((s) => (
+                        <option key={s.id} value={s.name}>
+                          {s.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={editSubject}>{editSubject}</option>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Target Kelas Rombel
+                  </label>
+                  <select
+                    value={editClassId}
+                    onChange={(e) => setEditClassId(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  >
+                    <option value="all">Semua Rombel Terbuka</option>
+                    {classes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.major})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Tipe / Format Utama
+                  </label>
+                  <select
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value as MaterialType)}
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  >
+                    <option value="pdf">Dokumen PDF (Modul / Buku)</option>
+                    <option value="docx">Microsoft Word (DOCX / Jobsheet)</option>
+                    <option value="ppt">Presentasi PPTX (Slide Tayang)</option>
+                    <option value="video">File Video MP4</option>
+                    <option value="youtube">Tautan Video YouTube</option>
+                    <option value="link">Tautan Eksternal / Web</option>
+                  </select>
+                </div>
+
+                {editType === 'youtube' ? (
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      YouTube Video ID
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: jC4v5AS4RIM"
+                      value={editYoutubeId}
+                      onChange={(e) => setEditYoutubeId(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </div>
+                ) : editType === 'link' ? (
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      URL Tautan Eksternal
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://..."
+                      value={editExternalLink}
+                      onChange={(e) => setEditExternalLink(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Attachments Section in Edit Modal */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-slate-700 dark:text-slate-300">
+                    Berkas Lampiran Modul ({editAttachments.length})
+                  </label>
+                  <input
+                    ref={editFileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.mp4,.zip,.png,.jpg,.jpeg"
+                    onChange={(e) => {
+                      handleEditFilesSelected(e.target.files);
+                      if (e.target) e.target.value = '';
+                    }}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => editFileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 cursor-pointer"
+                  >
+                    <Paperclip className="h-3 w-3" />
+                    <span>+ Tambah / Unggah File</span>
+                  </button>
+                </div>
+
+                {editAttachments.length > 0 ? (
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {editAttachments.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2.5 border border-slate-200 dark:border-slate-700 text-xs"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <FileText className="h-4 w-4 text-indigo-500 shrink-0" />
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                            {file.name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">({file.size})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditAttachments((prev) => prev.filter((_, i) => i !== idx))
+                          }
+                          className="text-slate-400 hover:text-rose-500 p-1 cursor-pointer"
+                          title="Hapus Lampiran"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic">
+                    Tidak ada berkas lampiran.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Deskripsi & Petunjuk Belajar Mandiri
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-3 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:border-indigo-500 leading-relaxed"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingMaterial(null)}
+                  className="rounded-2xl px-4 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 cursor-pointer font-bold"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-indigo-600 px-5 py-2 font-bold text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/30 cursor-pointer"
+                >
+                  Simpan Perubahan Materi
                 </button>
               </div>
             </form>

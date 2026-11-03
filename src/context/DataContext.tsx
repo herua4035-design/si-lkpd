@@ -89,10 +89,12 @@ interface DataContextType {
 
   // Material Actions
   addMaterial: (mat: Omit<LearningMaterial, 'id' | 'createdAt' | 'views'>) => void;
+  updateMaterial: (id: string, updates: Partial<LearningMaterial>) => void;
   deleteMaterial: (id: string) => void;
 
   // Assignment & LKPD Actions
   addAssignment: (assign: Omit<Assignment, 'id' | 'createdAt'>) => void;
+  updateAssignment: (id: string, updates: Partial<Assignment>) => void;
   deleteAssignment: (id: string) => void;
   addLKPD: (lkpd: Omit<InteractiveLKPD, 'id' | 'createdAt'>) => void;
   updateLKPD: (id: string, lkpd: Partial<InteractiveLKPD>) => void;
@@ -478,6 +480,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
+  const updateMaterial = (id: string, updates: Partial<LearningMaterial>) => {
+    setData((prev: any) => ({
+      ...prev,
+      materials: prev.materials.map((m: LearningMaterial) => (m.id === id ? { ...m, ...updates } : m))
+    }));
+  };
+
   const deleteMaterial = (id: string) => {
     setData((prev: any) => ({
       ...prev,
@@ -507,6 +516,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...prev,
       assignments: [newAssign, ...prev.assignments],
       notifications: [notif, ...prev.notifications]
+    }));
+  };
+
+  const updateAssignment = (id: string, updates: Partial<Assignment>) => {
+    setData((prev: any) => ({
+      ...prev,
+      assignments: prev.assignments.map((a: Assignment) => (a.id === id ? { ...a, ...updates } : a))
     }));
   };
 
@@ -829,9 +845,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteTP,
 
         addMaterial,
+        updateMaterial,
         deleteMaterial,
 
         addAssignment,
+        updateAssignment,
         deleteAssignment,
 
         addLKPD,

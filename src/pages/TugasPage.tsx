@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
+  Edit2,
   FileText,
   Paperclip,
   Eye,
@@ -33,6 +34,7 @@ export const TugasPage: React.FC = () => {
   const {
     assignments,
     addAssignment,
+    updateAssignment,
     deleteAssignment,
     submissions,
     submitAssignment,
@@ -79,6 +81,20 @@ export const TugasPage: React.FC = () => {
       uploadedAt: new Date().toISOString()
     }
   ]);
+
+  // Edit assignment state
+  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editSubject, setEditSubject] = useState('');
+  const [editClassId, setEditClassId] = useState('');
+  const [editCpId, setEditCpId] = useState('');
+  const [editTpId, setEditTpId] = useState('');
+  const [editLkpdId, setEditLkpdId] = useState('');
+  const [editDeadline, setEditDeadline] = useState('');
+  const [editAssignmentAttachments, setEditAssignmentAttachments] = useState<AttachmentItem[]>([]);
+  const editAssignmentFileInputRef = useRef<HTMLInputElement>(null);
+
   // Student submission form states
   const [studentNote, setStudentNote] = useState('');
   const [uploadedFileName, setUploadedFileName] = useState('Laporan_Praktikum_Mandiri.pdf');
@@ -177,6 +193,67 @@ export const TugasPage: React.FC = () => {
       title: 'Penugasan Berhasil Diterbitkan',
       text: 'Peserta didik rombel telah menerima notifikasi penugasan beserta lampiran panduan.',
       timer: 1800,
+      showConfirmButton: false
+    });
+  };
+
+  const handleOpenEditAssignment = (assign: Assignment) => {
+    setEditingAssignment(assign);
+    setEditTitle(assign.title);
+    setEditDescription(assign.description);
+    setEditSubject(assign.subject);
+    setEditClassId(assign.classIds[0] || classes[0]?.id || '');
+    setEditCpId(assign.cpId || cpList[0]?.id || '');
+    setEditTpId(assign.tpId || tpList[0]?.id || '');
+    setEditLkpdId(assign.lkpdId || '');
+    setEditDeadline(assign.deadline ? assign.deadline.slice(0, 16) : '2026-11-20T23:59');
+    setEditAssignmentAttachments(assign.attachments ? [...assign.attachments] : []);
+  };
+
+  const handleEditAssignmentFilesPicked = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf';
+      const detectedType = ext === 'docx' ? 'docx' : ext === 'pptx' ? 'pptx' : 'pdf';
+      reader.onload = (e) => {
+        const dataUrl = (e.target?.result as string) || '#';
+        const newAtt: AttachmentItem = {
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: file.name,
+          url: dataUrl,
+          size: formatFileSize(file.size),
+          type: detectedType,
+          uploadedAt: new Date().toISOString()
+        };
+        setEditAssignmentAttachments((prev) => [...prev, newAtt]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleSaveEditAssignment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAssignment || !editTitle.trim()) return;
+
+    updateAssignment(editingAssignment.id, {
+      title: editTitle,
+      description: editDescription,
+      subject: editSubject,
+      classIds: [editClassId],
+      cpId: editCpId,
+      tpId: editTpId,
+      lkpdId: editLkpdId || undefined,
+      deadline: new Date(editDeadline).toISOString(),
+      attachments: editAssignmentAttachments.length > 0 ? editAssignmentAttachments : undefined
+    });
+
+    setEditingAssignment(null);
+    Swal.fire({
+      icon: 'success',
+      title: 'Penugasan Berhasil Diperbarui',
+      text: `Perubahan tugas "${editTitle}" berhasil disimpan.`,
+      timer: 1600,
       showConfirmButton: false
     });
   };
@@ -369,13 +446,24 @@ export const TugasPage: React.FC = () => {
                   )}
 
                   {canManage && (
-                    <button
-                      onClick={() => deleteAssignment(assign.id)}
-                      className="rounded-xl p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-                      title="Hapus Penugasan"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleOpenEditAssignment(assign)}
+                        className="flex items-center gap-1.5 rounded-xl bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-950/60 dark:text-slate-300 dark:hover:text-indigo-300 px-3 py-2 text-xs font-bold transition-colors cursor-pointer"
+                        title="Edit Penugasan"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                        <span>Edit</span>
+                      </button>
+
+                      <button
+                        onClick={() => deleteAssignment(assign.id)}
+                        className="rounded-xl p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                        title="Hapus Penugasan"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -744,6 +832,251 @@ export const TugasPage: React.FC = () => {
                   className="rounded-2xl bg-emerald-600 px-5 py-2.5 font-bold text-white hover:bg-emerald-700 shadow-md shadow-emerald-600/30"
                 >
                   Serahkan Tugas
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Assignment Modal */}
+      {editingAssignment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+          <div className="my-8 w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600">
+                  <Edit2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                    Edit Penugasan Pembelajaran & Asesmen
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Perbarui judul, instruksi, tenggat waktu, CP/TP, atau berkas panduan tugas
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingAssignment(null)}
+                className="rounded-xl p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditAssignment} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Judul Penugasan / Jobsheet
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Instruksi Kerja & Deskripsi Tugas
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-3 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:border-indigo-500 leading-relaxed"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Mata Pelajaran
+                  </label>
+                  <select
+                    value={editSubject}
+                    onChange={(e) => setEditSubject(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  >
+                    {subjects && subjects.length > 0 ? (
+                      subjects.map((s) => (
+                        <option key={s.id} value={s.name}>
+                          {s.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={editSubject}>{editSubject}</option>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Target Kelas Rombel
+                  </label>
+                  <select
+                    value={editClassId}
+                    onChange={(e) => setEditClassId(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  >
+                    {classes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.major})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Capaian Pembelajaran (CP)
+                  </label>
+                  <select
+                    value={editCpId}
+                    onChange={(e) => setEditCpId(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  >
+                    {cpList.map((cp) => (
+                      <option key={cp.id} value={cp.id}>
+                        {cp.code} - {cp.element}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Tujuan Pembelajaran (TP)
+                  </label>
+                  <select
+                    value={editTpId}
+                    onChange={(e) => setEditTpId(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  >
+                    {tpList.map((tp) => (
+                      <option key={tp.id} value={tp.id}>
+                        {tp.code} - {tp.description.slice(0, 45)}...
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Tenggat Pengumpulan (Deadline)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={editDeadline}
+                    onChange={(e) => setEditDeadline(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Tautkan Modul LKPD Interaktif
+                  </label>
+                  <select
+                    value={editLkpdId}
+                    onChange={(e) => setEditLkpdId(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  >
+                    <option value="">-- Tanpa Tautan LKPD Langsung --</option>
+                    {lkpdList.map((lk) => (
+                      <option key={lk.id} value={lk.id}>
+                        {lk.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Attachments Section in Edit Assignment Modal */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-slate-700 dark:text-slate-300">
+                    Berkas Lampiran Panduan Guru ({editAssignmentAttachments.length})
+                  </label>
+                  <input
+                    ref={editAssignmentFileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.mp4,.zip,.png,.jpg,.jpeg"
+                    onChange={(e) => {
+                      handleEditAssignmentFilesPicked(e.target.files);
+                      if (e.target) e.target.value = '';
+                    }}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => editAssignmentFileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 cursor-pointer"
+                  >
+                    <Paperclip className="h-3 w-3" />
+                    <span>+ Tambah / Unggah File</span>
+                  </button>
+                </div>
+
+                {editAssignmentAttachments.length > 0 ? (
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {editAssignmentAttachments.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2.5 border border-slate-200 dark:border-slate-700 text-xs"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <FileText className="h-4 w-4 text-indigo-500 shrink-0" />
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                            {file.name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">({file.size})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditAssignmentAttachments((prev) =>
+                              prev.filter((_, i) => i !== idx)
+                            )
+                          }
+                          className="text-slate-400 hover:text-rose-500 p-1 cursor-pointer"
+                          title="Hapus Lampiran"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic">
+                    Tidak ada berkas lampiran panduan.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingAssignment(null)}
+                  className="rounded-2xl px-4 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 cursor-pointer font-bold"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-indigo-600 px-5 py-2 font-bold text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/30 cursor-pointer"
+                >
+                  Simpan Perubahan Penugasan
                 </button>
               </div>
             </form>

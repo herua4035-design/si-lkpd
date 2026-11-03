@@ -122,6 +122,16 @@ export const ClassPage: React.FC = () => {
   const [newPostCategory, setNewPostCategory] = useState<'pengumuman' | 'diskusi' | 'tugas'>('pengumuman');
   const [attachedFiles, setAttachedFiles] = useState<Array<{ name: string; size: string; type: string }>>([]);
 
+  // Post editing state
+  const [editingPost, setEditingPost] = useState<{
+    id: string;
+    title: string;
+    content: string;
+    category: 'pengumuman' | 'diskusi' | 'tugas';
+    attachments: Array<{ name: string; size: string; type: string; url?: string }>;
+  } | null>(null);
+  const editPostFileInputRef = useRef<HTMLInputElement>(null);
+
   // Form states for creating new class
   const [name, setName] = useState('');
   const [major, setMajor] = useState('Teknik Komputer dan Jaringan (TKJ)');
@@ -336,6 +346,103 @@ export const ClassPage: React.FC = () => {
         ]);
       };
       reader.readAsDataURL(file);
+    });
+  };
+
+  // Real file picker for Post Editing
+  const handleEditPostFileSelected = (files: FileList | null) => {
+    if (!files || files.length === 0 || !editingPost) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      const detected = detectFileType(file.name);
+      reader.onload = (e) => {
+        const dataUrl = (e.target?.result as string) || '#';
+        setEditingPost((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            attachments: [
+              ...prev.attachments,
+              {
+                name: file.name,
+                size: formatFileSize(file.size),
+                type: detected,
+                url: dataUrl
+              }
+            ]
+          };
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Save changes to an existing post
+  const handleSaveEditPost = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPost || !activeClass) return;
+    if (!editingPost.title.trim() && !editingPost.content.trim()) return;
+
+    const classKey = activeClass.id;
+    setClassPosts((prev) => {
+      const list = prev[classKey] || prev['default'] || [];
+      return {
+        ...prev,
+        [classKey]: list.map((p) =>
+          p.id === editingPost.id
+            ? {
+                ...p,
+                title: editingPost.title,
+                content: editingPost.content,
+                category: editingPost.category,
+                attachments: editingPost.attachments
+              }
+            : p
+        )
+      };
+    });
+
+    setEditingPost(null);
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: 'Kiriman Berhasil Diperbarui',
+      showConfirmButton: false,
+      timer: 1600
+    });
+  };
+
+  // Delete an existing post
+  const handleDeletePost = (postId: string) => {
+    if (!activeClass) return;
+    Swal.fire({
+      title: 'Hapus Postingan Ini?',
+      text: 'Kiriman dan seluruh balasan diskusi akan dihapus permanen dari saluran.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonText: 'Batal',
+      confirmButtonText: 'Ya, Hapus'
+    }).then((r) => {
+      if (r.isConfirmed) {
+        const classKey = activeClass.id;
+        setClassPosts((prev) => {
+          const list = prev[classKey] || prev['default'] || [];
+          return {
+            ...prev,
+            [classKey]: list.filter((p) => p.id !== postId)
+          };
+        });
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: 'Postingan Berhasil Dihapus',
+          showConfirmButton: false,
+          timer: 1400
+        });
+      }
     });
   };
 
@@ -955,15 +1062,46 @@ export const ClassPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                        post.category === 'pengumuman'
-                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                          : post.category === 'tugas'
-                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                          : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                      }`}>
-                        {post.category}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                          post.category === 'pengumuman'
+                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                            : post.category === 'tugas'
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                            : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                        }`}>
+                          {post.category}
+                        </span>
+
+                        {(canManage || post.authorName === currentUser.displayName) && (
+                          <div className="flex items-center gap-1 ml-1">
+                            <button
+                              onClick={() =>
+                                setEditingPost({
+                                  id: post.id,
+                                  title: post.title,
+                                  content: post.content,
+                                  category: post.category,
+                                  attachments: post.attachments ? [...post.attachments] : []
+                                })
+                              }
+                              className="flex items-center gap-1 rounded-xl bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-950/60 dark:text-slate-300 dark:hover:text-indigo-300 px-2 py-1 text-xs font-bold transition-colors cursor-pointer"
+                              title="Edit Kiriman"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">Edit</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleDeletePost(post.id)}
+                              className="rounded-xl p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                              title="Hapus Kiriman"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Post Content */}
@@ -1723,6 +1861,173 @@ export const ClassPage: React.FC = () => {
                   className="rounded-2xl bg-indigo-600 px-5 py-2.5 font-bold text-white hover:bg-indigo-700 disabled:opacity-40 shadow-md shadow-indigo-600/30 cursor-pointer"
                 >
                   Unggah & Bagikan ke Saluran Kelas
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Post Modal */}
+      {editingPost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-fadeIn">
+          <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600">
+                  <Edit2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                    Edit Kiriman Saluran Kelas
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Perbarui judul, pengumuman, materi, atau lampiran dokumen
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingPost(null)}
+                className="rounded-xl p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditPost} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Kategori Kiriman
+                </label>
+                <select
+                  value={editingPost.category}
+                  onChange={(e) =>
+                    setEditingPost({
+                      ...editingPost,
+                      category: e.target.value as any
+                    })
+                  }
+                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                >
+                  <option value="pengumuman">📢 Pengumuman Penting</option>
+                  <option value="diskusi">💬 Diskusi & Tanya Jawab</option>
+                  <option value="tugas">📝 Petunjuk Tugas</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Judul Kiriman / Topik
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editingPost.title}
+                  onChange={(e) =>
+                    setEditingPost({
+                      ...editingPost,
+                      title: e.target.value
+                    })
+                  }
+                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-2.5 font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Isi Pesan / Instruksi
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={editingPost.content}
+                  onChange={(e) =>
+                    setEditingPost({
+                      ...editingPost,
+                      content: e.target.value
+                    })
+                  }
+                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 p-3 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:border-indigo-500 leading-relaxed"
+                />
+              </div>
+
+              {/* Attachments Section in Edit Modal */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-slate-700 dark:text-slate-300">
+                    Berkas Lampiran ({editingPost.attachments.length})
+                  </label>
+                  <input
+                    ref={editPostFileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.mp4,.zip,.png,.jpg,.jpeg"
+                    onChange={(e) => {
+                      handleEditPostFileSelected(e.target.files);
+                      if (e.target) e.target.value = '';
+                    }}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => editPostFileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 cursor-pointer"
+                  >
+                    <Paperclip className="h-3 w-3" />
+                    <span>+ Tambah Berkas</span>
+                  </button>
+                </div>
+
+                {editingPost.attachments.length > 0 ? (
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {editingPost.attachments.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2.5 border border-slate-200 dark:border-slate-700 text-xs"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <FileText className="h-4 w-4 text-indigo-500 shrink-0" />
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                            {file.name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">({file.size})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingPost({
+                              ...editingPost,
+                              attachments: editingPost.attachments.filter((_, i) => i !== idx)
+                            })
+                          }
+                          className="text-slate-400 hover:text-rose-500 p-1 cursor-pointer"
+                          title="Hapus Lampiran"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic">
+                    Tidak ada berkas lampiran.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingPost(null)}
+                  className="rounded-2xl px-4 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 cursor-pointer font-bold"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-indigo-600 px-5 py-2 font-bold text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/30 cursor-pointer"
+                >
+                  Simpan Perubahan
                 </button>
               </div>
             </form>
